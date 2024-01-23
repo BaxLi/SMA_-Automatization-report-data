@@ -1,0 +1,8 @@
+*.bat
+*.json
+~$*.docx
+SarcinaTehnica.docx
+test.py
+.vscode
+__pycache__
+myenv
