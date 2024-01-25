@@ -4,6 +4,7 @@ from gspread.utils import column_letter_to_index
 
 
 def update_sum_formulas_in_row(fb_sheet, date_row):
+    print(f' CALL update_sum_formulas_in_row - date_row={date_row}')
     def create_sum_formula(start_col, date_row, step, total_cols):
         # Generate the range of columns for the sum formula
         formula_parts = [f'INDIRECT("{column_index_to_string( idx)}"&{date_row})' for idx in
@@ -60,21 +61,3 @@ def column_index_to_string(col_index):
 def pauseMe(x=0):
     print(f" {x} - Press Enter to continue... \n")
     input()
-# Function to extract the simplified AdSetName
-
-
-def simplify_adset_name(name):
-    parts = name.split(' | ')
-    return ' | '.join(parts[-2:])
-
-# Function to parse a date string into a datetime object
-
-
-def parse_date(date_string):
-    try:
-        # Parse the date string into a datetime object
-        return parser.parse(date_string)
-    except ValueError:
-        # Handle the error if the date string is in an unrecognized format
-        # print(f"Error parsing date: {date_string}")
-        return None

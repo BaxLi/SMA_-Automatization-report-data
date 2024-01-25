@@ -1,13 +1,13 @@
 import gspread
-import time
 import warnings
+import time
 import pandas as pd
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from oauth2client.service_account import ServiceAccountCredentials
-from SMAFunctions import simplify_adset_name, parse_date, pauseMe, update_sum_formulas_in_row
+from SMAFunctions import  pauseMe, update_sum_formulas_in_row
 from SMAGoogleAPICalls import total_row_format, campaign_format_dates
 # Suppress only DeprecationWarnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -111,7 +111,7 @@ campaign_exp_sheet.clear()  # Clear existing data
 campaign_exp_sheet.update('A1', final_data_list)  # Update with new data
 
 print(f'Finish row data refactoring')
-
+time.sleep(2)
 #Reload values from the worksheet where your campaign data is stored
 campaign_exp_sheet = spreadsheet.worksheet('campaign_exp_sheet')
 
@@ -189,12 +189,14 @@ for index, row in campaign_exp_data.iterrows():
 
     # Update the 'InterimFB' sheet
     fb_sheet.update(f'{start_cell}:{end_cell}', [update_values], value_input_option='USER_ENTERED')
+    time.sleep(1)
     # raise ValueError(f"LINE 190  INTERIM sheet updated date_row_number={date_row_number}")
 
 # pauseMe(33)
 
-
-for date_row in range(3, fb_sheet.row_count):
+fb_sheet = spreadsheet.worksheet('InterimFB')
+print(f'fb_sheet.row_count={fb_sheet.row_count}\n -------------------')
+for date_row in range(3, fb_sheet.row_count+1):
     update_sum_formulas_in_row(fb_sheet, date_row)
     total_row_format(date_row)
     campaign_format_dates(date_row)
