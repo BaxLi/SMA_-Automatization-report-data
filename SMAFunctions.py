@@ -2,6 +2,12 @@ from dateutil import parser
 import gspread
 from gspread.utils import column_letter_to_index
 
+def update_sheet_headers(worksheet, replacements):
+    first_row_values = worksheet.row_values(1)
+    new_first_row_values = [replacements.get(value, value) for value in first_row_values]
+
+    if first_row_values != new_first_row_values:
+        worksheet.update('A1', [new_first_row_values])
 
 def update_sum_formulas_in_row(fb_sheet, date_row):
     print(f' CALL update_sum_formulas_in_row - date_row={date_row}')

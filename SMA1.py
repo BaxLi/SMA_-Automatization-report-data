@@ -7,10 +7,10 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from oauth2client.service_account import ServiceAccountCredentials
-from SMAFunctions import  pauseMe, update_sum_formulas_in_row
+from SMAFunctions import  pauseMe, update_sum_formulas_in_row, update_sheet_headers
 from SMAGoogleAPICalls import total_row_format, campaign_format_dates
 # Suppress only DeprecationWarnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings('always')
 
 # Use the JSON key file you downloaded to set up the credentials
 scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
@@ -25,14 +25,18 @@ credentials = Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE,
     scopes=['https://www.googleapis.com/auth/spreadsheets']
 )
+print(f'LINE 28 !')
 # Build the service client
 service = build('sheets', 'v4', credentials=credentials)
 # Open the spreadsheet
 spreadsheet = client.open_by_url(
     'https://docs.google.com/spreadsheets/d/1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4/edit#gid=231244777')
+print(f'LINE 34 !')
 
-exp_sheet = spreadsheet.worksheet('Facebook Export Data')
+FB_data_exp_sheet = spreadsheet.worksheet('Facebook Export Data')
+GOOGLE_data_exp_sheet = spreadsheet.worksheet('campaign_exp_sheet')
 fb_sheet = spreadsheet.worksheet('InterimFB')
+print(f'LINE 36 !')
 
 fb_campaigns = [
     "BAU | Control_AdSet",
@@ -44,24 +48,21 @@ fb_campaigns = [
     "BAU | Page Likes",
     "nBAU"
 ]
-
-# Get the first row of the exp_sheet
-first_row_values = exp_sheet.row_values(1)
+google_campaigns = [
+    "BAU | Brand","BAU | Search", "BAU | PMAX", "nBAU"
+]
 
 # Prepare a dictionary of terms to replace
-replacements = {'Amount spent': 'Ad Spend', 'Contacts (website)': 'Total Leads'}
+replacements_FB = {'Amount spent': 'Ad Spend', 'Contacts (website)': 'Total Leads'}
+replacements_GOOGLE = {'Determined Campaign': 'AdSet name'}
 
-# Create a new list with the replaced terms
-new_first_row_values = [replacements.get(value, value) for value in first_row_values]
+# Update headers if necessary
+update_sheet_headers(FB_data_exp_sheet, replacements_FB)
+update_sheet_headers(GOOGLE_data_exp_sheet, replacements_GOOGLE)
 
-# Update the first row with the new values if changes have been made
-if first_row_values != new_first_row_values:
-    exp_sheet.update('A1', [new_first_row_values])
-    # Reload the worksheet to reflect the header changes
-    exp_sheet = spreadsheet.worksheet('Facebook Export Data')
-
+print(f'LINE 65 !')
 # Fetch data into DataFrame
-data = pd.DataFrame(exp_sheet.get_all_records())
+data = pd.DataFrame(FB_data_exp_sheet.get_all_records())
 # print(data.to_string(index=False))
 # Convert numerical columns to float and fill missing values
 numeric_columns = ['Ad Spend', 'Total Leads',
@@ -73,7 +74,7 @@ for column in numeric_columns:
 consolidated_data = []
 
 # Function to determine the campaign based on AdSet name
-
+pauseMe(1)
 
 def determine_campaign(adset_name):
     for campaign in fb_campaigns:
@@ -81,7 +82,7 @@ def determine_campaign(adset_name):
             return campaign
     return 'Other'  # Fallback category
 
-
+print(f'LINE 87 !')
 # Add a column for the determined campaign
 data['Determined Campaign'] = data['AdSet name'].apply(determine_campaign)
 
@@ -96,21 +97,22 @@ grouped = data.groupby(['Date', 'Determined Campaign']).agg({
 # Convert the DataFrame to a format suitable for gspread
 final_data_list = [grouped.columns.tolist()] + grouped.values.tolist()
 
-
+print(f'LINE 102 !')
 # Check if 'campaign_exp_sheet' exists or create it
 try:
     campaign_exp_sheet = spreadsheet.worksheet('campaign_exp_sheet')
 except gspread.exceptions.WorksheetNotFound:
     # If not found, create a new worksheet
+    print(f'LINE 108 !')
     campaign_exp_sheet = spreadsheet.add_worksheet(
         title='campaign_exp_sheet', rows="100", cols="20")
-
+print(f'LINE 110 !')
 # Write the data to the new sheet
 campaign_exp_sheet = spreadsheet.worksheet('campaign_exp_sheet')
 campaign_exp_sheet.clear()  # Clear existing data
 campaign_exp_sheet.update('A1', final_data_list)  # Update with new data
 
-print(f'Finish row data refactoring')
+print(f'LINE 116 Finish row data refactoring \n')
 time.sleep(2)
 #Reload values from the worksheet where your campaign data is stored
 campaign_exp_sheet = spreadsheet.worksheet('campaign_exp_sheet')
@@ -193,7 +195,7 @@ for index, row in campaign_exp_data.iterrows():
     # raise ValueError(f"LINE 190  INTERIM sheet updated date_row_number={date_row_number}")
 
 # pauseMe(33)
-
+print(f'LINE 199 !')
 fb_sheet = spreadsheet.worksheet('InterimFB')
 print(f'fb_sheet.row_count={fb_sheet.row_count}\n -------------------')
 for date_row in range(3, fb_sheet.row_count+1):
