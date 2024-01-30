@@ -34,7 +34,7 @@ spreadsheet = client.open_by_url(
 print(f'LINE 34 !')
 
 FB_data_exp_sheet = spreadsheet.worksheet('Facebook Export Data')
-GOOGLE_data_exp_sheet = spreadsheet.worksheet('campaign_exp_sheet')
+GOOGLE_data_exp_sheet = spreadsheet.worksheet('Google Export Data')
 fb_sheet = spreadsheet.worksheet('InterimFB')
 print(f'LINE 36 !')
 
@@ -54,7 +54,7 @@ google_campaigns = [
 
 # Prepare a dictionary of terms to replace
 replacements_FB = {'Amount spent': 'Ad Spend', 'Contacts (website)': 'Total Leads'}
-replacements_GOOGLE = {'Determined Campaign': 'AdSet name'}
+replacements_GOOGLE = {'Campaign name': 'AdSet name'}
 
 # Update headers if necessary
 update_sheet_headers(FB_data_exp_sheet, replacements_FB)
@@ -62,8 +62,12 @@ update_sheet_headers(GOOGLE_data_exp_sheet, replacements_GOOGLE)
 
 print(f'LINE 65 !')
 # Fetch data into DataFrame
-data = pd.DataFrame(FB_data_exp_sheet.get_all_records())
-# print(data.to_string(index=False))
+data_fb = pd.DataFrame(FB_data_exp_sheet.get_all_records())
+data_google = pd.DataFrame(GOOGLE_data_exp_sheet.get_all_records())
+data=pd.concat([data_fb, data_google], ignore_index=True)
+
+print(data.to_string(index=False))
+# pauseMe(22)
 # Convert numerical columns to float and fill missing values
 numeric_columns = ['Ad Spend', 'Total Leads',
                    'Post comments', 'Impressions']
@@ -74,10 +78,13 @@ for column in numeric_columns:
 consolidated_data = []
 
 # Function to determine the campaign based on AdSet name
-pauseMe(1)
+# pauseMe(1)
 
 def determine_campaign(adset_name):
     for campaign in fb_campaigns:
+        if campaign in adset_name:
+            return campaign
+    for campaign in google_campaigns:
         if campaign in adset_name:
             return campaign
     return 'Other'  # Fallback category
@@ -113,7 +120,7 @@ campaign_exp_sheet.clear()  # Clear existing data
 campaign_exp_sheet.update('A1', final_data_list)  # Update with new data
 
 print(f'LINE 116 Finish row data refactoring \n')
-time.sleep(2)
+# pauseMe(2)
 #Reload values from the worksheet where your campaign data is stored
 campaign_exp_sheet = spreadsheet.worksheet('campaign_exp_sheet')
 
@@ -133,7 +140,6 @@ dates_column = interim_fb_sheet.col_values(1)[2:]  # Start from row 3 to skip he
 # Iterate over each row in 'campaign_exp_data'
 for index, row in campaign_exp_data.iterrows():
     # Find the row number for the current date in 'InterimFB'
-    
     date = row['Date']
     if date in dates_column:
         date_row_number = dates_column.index(date) + 3  # Offset for header rows
@@ -150,6 +156,9 @@ for index, row in campaign_exp_data.iterrows():
     # Determine the campaign from the 'AdSet name'
     determined_campaign = row['Determined Campaign'] 
     print(f'\n determined_campaign={determined_campaign} date_row_number={date_row_number}\n ============')
+    if determined_campaign == "Other":
+        print(f'determine_campaign == "Other" ? {determine_campaign == "Other"}')
+        continue
     if not determined_campaign:
          # If no matching campaign is found, skip this iteration
         raise ValueError(f"LINE 160 Campaign not found in INTERIM sheet {determined_campaign}.")
@@ -190,7 +199,7 @@ for index, row in campaign_exp_data.iterrows():
     end_cell = gspread.utils.rowcol_to_a1(date_row_number, start_column_index + 6)  # Assuming there are 7 metrics to update
 
     # Update the 'InterimFB' sheet
-    fb_sheet.update(f'{start_cell}:{end_cell}', [update_values], value_input_option='USER_ENTERED')
+    fb_sheet.update(range_name=f'{start_cell}:{end_cell}', values=[update_values], value_input_option='USER_ENTERED')
     time.sleep(1)
     # raise ValueError(f"LINE 190  INTERIM sheet updated date_row_number={date_row_number}")
 
