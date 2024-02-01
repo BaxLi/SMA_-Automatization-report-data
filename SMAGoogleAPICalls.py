@@ -10,9 +10,6 @@ credentials = Credentials.from_service_account_file(
     scopes=['https://www.googleapis.com/auth/spreadsheets']
 )
 
-# Build the service client
-service = build('sheets', 'v4', credentials=credentials)
-
 def rangeDef(date_row,startColIdx, endColIndex=None,sheet_id=Page_InterimFB):
     return {
                             "sheetId": sheet_id,  # Replace with your sheet ID
@@ -21,6 +18,7 @@ def rangeDef(date_row,startColIdx, endColIndex=None,sheet_id=Page_InterimFB):
                             "startColumnIndex": startColIdx,  # Column B
                             "endColumnIndex": startColIdx + 1 if endColIndex is None else endColIndex
                         }
+
 def create_format_request(range_def, number_format_type, pattern):
     return {
         "repeatCell": {
@@ -37,41 +35,51 @@ def create_format_request(range_def, number_format_type, pattern):
         }
     }
 
-def total_row_format(date_row, sheet_id=Page_InterimFB):
-    requests = []
-    adspend = create_format_request(rangeDef(date_row, 1), "CURRENCY", '"€"#,##0.00')
-    impressions = create_format_request(rangeDef(date_row, 2), "NUMBER", "#0")
-    totalleads = create_format_request(rangeDef(date_row, 3), "NUMBER", "#0")
-    total_comments = create_format_request(rangeDef(date_row, 4),  "NUMBER", "#0")
-    total_cpl = create_format_request(rangeDef(date_row, 5), "CURRENCY", '"€"#,##0.00')
-    total_cpComments = create_format_request(rangeDef(date_row, 6), "CURRENCY", '"€"#,##0.00')
-    # percentage_format5 = create_format_request(rangeDef(date_row, 5), "PERCENT", "0.00%")
-    requests.extend([adspend, impressions,totalleads, total_comments, total_cpl, total_cpComments])
+def total_row_format(date_row, workbook_id=None, service=None):
+# Ensure service and WB (Workbook ID) are passed correctly
+    if service is None or workbook_id is None:
+        raise ValueError("All service and sheet_id and WB must be provided")
+
+    # Define column formats in a more maintainable structure
+    column_formats = [
+        (1, "CURRENCY", '"€"#,##0.00'),  # Ad Spend
+        (2, "NUMBER", "#0"),              # Impressions
+        (3, "NUMBER", "#0"),              # Total Leads
+        (4, "NUMBER", "#0"),              # Total Comments
+        (5, "CURRENCY", '"€"#,##0.00'),  # Total CPL
+        (6, "CURRENCY", '"€"#,##0.00'),  # Total CPComments
+    ]
+    requests = [
+        create_format_request(rangeDef(date_row, col_idx), format_type, pattern)
+        for col_idx, format_type, pattern in column_formats
+    ]
     request_body = {"requests": requests}
-    service.spreadsheets().batchUpdate(spreadsheetId=WB, body=request_body).execute()
+    service.spreadsheets().batchUpdate(spreadsheetId=workbook_id, body=request_body).execute()
 
+def campaign_format_dates(date_row, workbook_id=None, service=None):
+    if service is None or workbook_id is None:
+        raise ValueError("Both service and my_spreadsheet must be provided")
 
-def campaign_format_dates(date_row, my_spreadsheet=WB):
-    request_params = []
-    startColumn = 7
+    start_column = 7
     step = 7
-    # Equal with FB campaigns
     number_of_sets = 8
+    column_formats = [
+        ("CURRENCY", '"€"#,##0.00'),  # Ad Spend
+        ("NUMBER", "#0"),             # Impressions
+        ("NUMBER", "#0"),             # Total Leads
+        ("NUMBER", "#0"),             # Total Comments
+        ("CURRENCY", '"€"#,##0.00'),  # Total CPL
+        ("CURRENCY", '"€"#,##0.00'),  # Total CPComments
+        ("PERCENT", "0.00%"),         # Percentage of Spend
+    ]
 
-    # Loop through each set of 7 columns
+    requests = []
     for set_number in range(number_of_sets):
-        column_offset = startColumn + (set_number * step)
-        adspend = create_format_request(rangeDef(date_row, column_offset), "CURRENCY", '"€"#,##0.00')
-        impressions = create_format_request(rangeDef(date_row, column_offset + 1), "NUMBER", "#0")
-        total_leads = create_format_request(rangeDef(date_row, column_offset + 2), "NUMBER", "#0")
-        total_comments = create_format_request(rangeDef(date_row, column_offset + 3), "NUMBER", "#0")
-        total_cpl = create_format_request(rangeDef(date_row, column_offset + 4), "CURRENCY", '"€"#,##0.00')
-        total_cpComments = create_format_request(rangeDef(date_row, column_offset + 5), "CURRENCY", '"€"#,##0.00')
-        p_of_spend = create_format_request(rangeDef(date_row, column_offset + 6), "PERCENT", "0.00%")
+        column_offset = start_column + (set_number * step)
+        for i, (format_type, pattern) in enumerate(column_formats):
+            cell_range = rangeDef(date_row, column_offset + i)
+            format_request = create_format_request(cell_range, format_type, pattern)
+            requests.append(format_request)
 
-        request_params.extend([adspend, impressions, total_leads, total_comments, total_cpl, total_cpComments, p_of_spend])
-
-    request_body = {"requests": request_params}
-    
-    service.spreadsheets().batchUpdate(spreadsheetId=my_spreadsheet, body=request_body).execute()
-
+    request_body = {"requests": requests}
+    service.spreadsheets().batchUpdate(spreadsheetId=workbook_id, body=request_body).execute()
