@@ -3,63 +3,64 @@ import warnings
 import time
 import pandas as pd
 
-from google.oauth2.service_account import Credentials
+# from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-from oauth2client.service_account import ServiceAccountCredentials
-from SMAFunctions import  pauseMe, update_sum_formulas_in_row_TOTAL_company, step1_v2_commonCampaignSheetCreate, step2_iterateExport
-from SMAGoogleAPICalls import total_row_format, campaign_format_dates
-from SMA_Constants import fb_campaigns, google_campaigns,interim_campaigns_sheet_name,commonExportedCampaignsSheet  
+# from oauth2client.service_account import ServiceAccountCredentials
+from SMAFunctions import pauseMe, step1_v2_commonCampaignSheetCreate, step2_iterateExport, restructure_to_weekly, step2_Totals_Calc, step_Campaign_totals, column_letter_to_index
+from SMAGoogleAPICalls import total_summary_section_format, campaign_format_dates
+from SMA_Constants import creds, CREDENTIALS, workbook_url, interim_campaigns_sheet_name, commonExportedCampaignsSheet, FB_TOTAL_COL, GOOGLE_TOTAL_COL, Google_workbook, google_campaigns, fb_campaigns
+
 # Suppress only DeprecationWarnings
 warnings.filterwarnings('always')
-
-# Use the JSON key file you downloaded to set up the credentials
-scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
-         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(
-    'sma-automatization-d95cdc6c39de.json', scope)
 client = gspread.authorize(creds)
-SERVICE_ACCOUNT_FILE = 'sma-automatization-d95cdc6c39de.json'
-Google_workbook = '1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
-Google_doc_sheet_id = 231244777
-credentials = Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE,
-    scopes=['https://www.googleapis.com/auth/spreadsheets']
-)
-print(f'LINE 28 !')
+print(f'LINE 16  -------- >>>      START ! \n')
 # Build the service client
-service = build('sheets', 'v4', credentials=credentials)
+service = build('sheets', 'v4', credentials=CREDENTIALS)
 # Open the spreadsheet
-spreadsheet = client.open_by_url(
-    'https://docs.google.com/spreadsheets/d/1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4/edit#gid=231244777')
-print(f'LINE 34 - after open Google spreadsheet !')
+spreadsheet = client.open_by_url(workbook_url)
+print(f'LINE 22 - after open Google spreadsheet !')
 
-# ------------------ STEP-1 -------------------------------
+# ------------------ STEP-1 - Collect data into campaign_exp_sheet -------------------------------
 
-# step1_v2_commonCampaignSheetCreate(spreadsheet)
-# pauseMe(1)
+step1_v2_commonCampaignSheetCreate(spreadsheet)
+# pauseMe('SMA1 - STEP-1 \n')
 
 # ---------------- STEP-2 ---------------------------------
 
-# #Reload values from the worksheet where your COMMON campaign data is stored
-# campaign_exp_sheet = spreadsheet.worksheet(commonExportedCampaignsSheet)
+#Reload values from the worksheet where your COMMON campaign data is stored
+campaign_exp_sheet = spreadsheet.worksheet(commonExportedCampaignsSheet)
 
-# # Access the 'Interim' sheet with predefined structure
-# # print(f'Read from InetromSHeet - {interim_campaigns_sheet_name} \n')
-# interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
+# Access the 'Interim' sheet with predefined structure
+# print(f'Read from InetromSHeet - {interim_campaigns_sheet_name} \n')
+interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 
-# step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet)
+step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet)
+step_Campaign_totals(interim_campaigns_sheet, FB_TOTAL_COL, GOOGLE_TOTAL_COL) #Calculate FB TOTALS 
+time.sleep(1)
+step_Campaign_totals(interim_campaigns_sheet, GOOGLE_TOTAL_COL) #Calculate GOOGLE TOTALS
+time.sleep(1)
+step2_Totals_Calc(interim_campaigns_sheet) #Calculate TOTAL summary 
+time.sleep(1)
 
+# pauseMe('SMA1 - STEP-2 \n')
 # ---------------- STEP-3 ---------------------------------
 
-interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
+# interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 print(f' LINE 129 interim_campaigns_sheet.row_count={interim_campaigns_sheet.row_count}\n -------------------')
 
 # for date_row in range(3, interim_campaigns_sheet.row_count+1):
-for date_row in range(3, 4):
-    update_sum_formulas_in_row_TOTAL_company('FB',interim_campaigns_sheet, date_row)
-    # update_sum_formulas_in_row_TOTAL_company('Google',interim_campaigns_sheet, date_row)
-    # time.sleep(1)
-    # total_row_format(date_row, Google_workbook, service)
-    # time.sleep(1)
-    # campaign_format_dates(date_row, Google_workbook, service)
+for date_row in range(3, interim_campaigns_sheet.row_count+1):
+    print(f'{date_row}')
+    total_summary_section_format(date_row, Google_workbook, service) #Total summary formatted
+    time.sleep(2)
+    total_summary_section_format(date_row, Google_workbook, service,'H') #Total FB summary formatted
+    time.sleep(2)
+    total_summary_section_format(date_row, Google_workbook, service,'BY') #Total GOOGLE summary formatted
+    time.sleep(2)
+    campaign_format_dates(date_row, Google_workbook, service, column_letter_to_index(FB_TOTAL_COL)+5,len(fb_campaigns)-1)
+    campaign_format_dates(date_row, Google_workbook, service, column_letter_to_index(GOOGLE_TOTAL_COL)+5, len(google_campaigns)-1)
+
+# ---------------- STEP-3 ---------------------------------
+# STEP 10 - format rows per week per month 
+# restructure_to_weekly(interim_campaigns_sheet,spreadsheet.worksheet('TOTAL') )

@@ -1,6 +1,7 @@
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from SMAFunctions import column_letter_to_index
 
 SERVICE_ACCOUNT_FILE = 'sma-automatization-d95cdc6c39de.json'
 WB='1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
@@ -35,19 +36,22 @@ def create_format_request(range_def, number_format_type, pattern):
         }
     }
 
-def total_row_format(date_row, workbook_id=None, service=None):
+def total_summary_section_format(date_row, workbook_id=None, service=None, start_col=None):
 # Ensure service and WB (Workbook ID) are passed correctly
     if service is None or workbook_id is None:
         raise ValueError("All service and sheet_id and WB must be provided")
 
+     # Calculate the starting index from the column letter
+    start_col_index = column_letter_to_index(start_col)-1 if start_col is not None else 0
+
     # Define column formats in a more maintainable structure
     column_formats = [
-        (1, "CURRENCY", '"€"#,##0.00'),  # Ad Spend
-        (2, "NUMBER", "#0"),              # Impressions
-        (3, "NUMBER", "#0"),              # Total Leads
-        (4, "NUMBER", "#0"),              # Total Comments
-        (5, "CURRENCY", '"€"#,##0.00'),  # Total CPL
-        (6, "CURRENCY", '"€"#,##0.00'),  # Total CPComments
+        (start_col_index+1, "CURRENCY", '"€"#,##0.00'),  # Ad Spend
+        (start_col_index+2, "NUMBER", "#0"),              # Impressions
+        (start_col_index+3, "NUMBER", "#0"),              # Total Leads
+        (start_col_index+4, "NUMBER", "#0"),              # Total Comments
+        (start_col_index+5, "CURRENCY", '"€"#,##0.00'),  # Total CPL
+        (start_col_index+6, "CURRENCY", '"€"#,##0.00'),  # Total CPComments
     ]
     requests = [
         create_format_request(rangeDef(date_row, col_idx), format_type, pattern)
@@ -56,13 +60,13 @@ def total_row_format(date_row, workbook_id=None, service=None):
     request_body = {"requests": requests}
     service.spreadsheets().batchUpdate(spreadsheetId=workbook_id, body=request_body).execute()
 
-def campaign_format_dates(date_row, workbook_id=None, service=None):
+def campaign_format_dates(date_row, workbook_id=None, service=None, start_col=None, nr_sets=None):
     if service is None or workbook_id is None:
         raise ValueError("Both service and my_spreadsheet must be provided")
 
-    start_column = 7
+    start_column = 14 if start_col is None else start_col
     step = 7
-    number_of_sets = 8
+    number_of_sets = 8 if nr_sets is None else nr_sets
     column_formats = [
         ("CURRENCY", '"€"#,##0.00'),  # Ad Spend
         ("NUMBER", "#0"),             # Impressions

@@ -4,8 +4,76 @@ import time
 from gspread.utils import column_letter_to_index
 from gspread.exceptions import WorksheetNotFound
 import pandas as pd
-from SMAGoogleAPICalls import total_row_format, campaign_format_dates
-from SMA_Constants import fb_campaigns, google_campaigns, commonExportedCampaignsSheet
+from SMAGoogleAPICalls import total_summary_section_format, campaign_format_dates
+from SMA_Constants import fb_campaigns, google_campaigns, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL
+
+  
+
+def restructure_to_weekly(interim_campaigns_sheet, total_sheet):
+    # Fetch the data from 'interim_campaigns_sheet'
+    interim_data = interim_campaigns_sheet.get_all_values()
+    total_data = total_sheet.get_all_values()
+
+    # Headers are assumed to be in the first two rows
+    headers = [interim_data[0], interim_data[1]]
+
+    # Data is assumed to start from the third row
+    df_interim = pd.DataFrame(interim_data[2:], columns=headers[1])
+    df_total = pd.DataFrame(total_data[2:], columns=headers[1])
+    # Convert the 'Date' column to datetime if necessary
+    df_interim['Date'] = pd.to_datetime(df_interim['Date'])
+    df_total['Date'] = pd.to_datetime(df_total['Date'])
+
+    # Set 'Date' as the index for both DataFrames
+    df_interim.set_index('Date', inplace=True)
+    df_total.set_index('Date', inplace=True)
+
+    # Update df_total with df_interim entries; this will overwrite existing data in df_total with that in df_interim
+    # for matching dates. Non-matching dates in df_total will remain as is.
+    df_total.update(df_interim)
+    # Reset the index if you want 'Date' back as a column
+    df_total.reset_index(inplace=True)
+
+    df=df_total
+    print(df.iloc[3:5].to_string())
+    # Sort the dataframe by date
+    df.sort_values(by='Date', inplace=True)
+
+    # Initialize structured data with headers
+    structured_data = [headers[0]] + [headers[1]]
+
+    # Initialize tracking for the week of the year and month
+    previous_week = None
+    week_days_count = 0
+
+    for index, row in df.iterrows():
+        current_date = row['Date']
+        week_of_year = current_date.isocalendar().week
+        month_name = current_date.strftime('%B')
+
+        # Track the day count within the same week
+        if week_of_year == previous_week or previous_week is None:
+            week_days_count += 1
+        else:
+            # Append week label when moving to a new week
+            structured_data.append([f"{previous_month} Week {previous_week}"])
+            week_days_count = 1  # Reset counter for the new week
+
+        # Append daily data
+        structured_data.append([current_date.strftime('%A, %B %d, %Y')] + row[1:].tolist())
+
+        # Track previous day's week and month for comparison in the next iteration
+        previous_week = week_of_year
+        previous_month = month_name
+
+        # Check if it's the last row to append the week and total labels correctly
+        if index == len(df) - 1:
+            structured_data.append([f"{month_name} Week {week_of_year}"])  # Week label for the last week
+            structured_data.append([f"Total {month_name}"])  # Total label for the last month
+
+    # Clear the 'TOTAL' sheet before updating it with the new structured data
+    total_sheet.clear()
+    total_sheet.update('A1', structured_data, value_input_option='USER_ENTERED')
 
 def update_sheet_headers(worksheet, replacements):
     first_row_values = worksheet.row_values(1)
@@ -13,64 +81,6 @@ def update_sheet_headers(worksheet, replacements):
 
     if first_row_values != new_first_row_values:
         worksheet.update('A1', [new_first_row_values])
-
-def update_sum_formulas_in_row_TOTAL_company(company, interim_campaigns_sheet, date_row):
-    print(f' CALL update_sum_formulas_in_row - date_row={date_row}')
-    def create_sum_formula(start_col, date_row, step, total_cols):
-        # Generate the range of columns for the sum formula
-        formula_parts = [f'INDIRECT("{column_index_to_string( idx)}"&{date_row})' for idx in
-                         range(column_letter_to_index(start_col), total_cols + 1, step)]
-        return f"=SUM({','.join(formula_parts)})"
-
-    # Starting column and step size
-    start_col_letter = 'N' if company=='FB' else 'CE'  # Starting from column G
-    start_col_index = column_letter_to_index(start_col_letter)
-    
-    step = 7  # Step size
-    
-    end_col_letter='BR' if company=='FB' else 'CZ'
-    end_col_index = column_letter_to_index(end_col_letter)
- 
-
-    # Calculate the total number of columns from start_col_letter to end_col_letter
-    total_cols = end_col_index - start_col_index + 1
-    # total_cols = interim_campaigns_sheet.col_count  # Total number of columns in the sheet
-    print(f'start_col_letter={start_col_letter} start_col_index={start_col_index} end_col_letter={end_col_letter}' \
-          f' end_col_index={end_col_index} total_cols={total_cols} \n')
-    # Iterate through the cells B, C, D
-    # for i in range(2, 6):  # B(2), C(3), D(4)
-    for i in range(start_col_index-6, start_col_index-2):  # B(2), C(3), D(4), E(5)
-
-        # Calculate the start column letter for this iteration
-        calculated_col_letter = column_index_to_string(
-            # column_letter_to_index(start_col_letter) + (i - 2))
-            start_col_index + (i - 8))
-        print(f'calculated_col_letter={calculated_col_letter} \n')
-        sum_formula = create_sum_formula(
-            calculated_col_letter, date_row, step, total_cols)
-        # Convert 2 to B, 3 to C, and 4 to D
-        cell_to_update = f'{chr(64 + i)}{date_row}'
-        interim_campaigns_sheet.update( values=sum_formula,range_name=cell_to_update, value_input_option='USER_ENTERED')
-        # print(f'Updated cell {cell_to_update} with formula: {sum_formula}')
-
-    ad_spend_total = gspread.utils.rowcol_to_a1(date_row, start_col_index-6) #2
-    leads_total = gspread.utils.rowcol_to_a1(date_row, start_col_index-4) #4
-    comments_total = gspread.utils.rowcol_to_a1(date_row, start_col_index-3) #5
-    # for i in range(6, 8):
-    for i in range(start_col_index-2, start_col_index):
-        calculated_col_letter = column_index_to_string(i)
-        # Convert 5 to E, etc
-        cell_to_update = f'{calculated_col_letter}{date_row}'
-        sum_formula = ''
-        if i == start_col_index-2:
-            sum_formula = f"=IF({leads_total}<>0,{ad_spend_total}/{leads_total},0)"
-        if i == start_col_index-1:
-            sum_formula = f"=IF({comments_total}<>0,{ad_spend_total}/{comments_total},0)"
-        interim_campaigns_sheet.update(cell_to_update, sum_formula,
-                        value_input_option='USER_ENTERED')
-        print(
-            f'percentage i={i} Updated cell {cell_to_update} with formula: {sum_formula}')
-
 
 def column_index_to_string(col_index):
     """Convert a column index into a column letter: 1 -> A, 2 -> B, etc."""
@@ -227,19 +237,22 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     campaign_exp_sheet.clear()  # Clear before updating to avoid appending to old data
     campaign_exp_sheet.update(values=[grouped.columns.values.tolist()] + grouped.values.tolist(), range_name='A1' )
     print(f'LINE 116 Finish FUNCTION STEP - 1  \n')
-    pauseMe("Step-1 finish")
+    # pauseMe("Step-1 finish")
 
 # Iterate over each row in 'campaign_exp_data'
 def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
-
     # Now, retrieve the data from the sheet and store it in the 'campaign_exp_data' DataFrame
     campaign_exp_data = pd.DataFrame(campaign_exp_sheet.get_all_records())
+    # Define colors for success and failure
+    success_color = {"red": 0.85, "green": 0.93, "blue": 0.83}  # Light green
+    failure_color = {"red": 0.96, "green": 0.80, "blue": 0.80}  # Light red
 
     # Retrieve headers to find the correct column for each campaign metric
     header_row = interim_campaigns_sheet.row_values(1)  # Campaign names
 
     # Assuming the date column is the first one in 'InterimFB'
     dates_column = interim_campaigns_sheet.col_values(1)[2:]  # Start from row 3 to skip header rows
+
     for index, row in campaign_exp_data.iterrows():
         # Find the row number for the current date in 'InterimFB'
         date = row['Date']
@@ -248,21 +261,19 @@ def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
         else:
             # Add new row at the end with the date
             date_row_number = len(dates_column) + 3  # New row number
-            if (date_row_number>interim_campaigns_sheet.row_count):
-                interim_campaigns_sheet.append_row([date])  # Append the new date
-                dates_column.append(date)  # Update local date list
-            else:
-                cell_address = gspread.utils.rowcol_to_a1(date_row_number, 1)
-                interim_campaigns_sheet.update_acell(cell_address, row['Date'])
+            interim_campaigns_sheet.append_row([date])  # Append the new date
+            dates_column.append(date)  # Update local date list
 
         # Determine the campaign from the 'AdSet name'
         determined_campaign = row['Determined Campaign'] 
-        print(f'\n determined_campaign={determined_campaign} date_row_number={date_row_number}\n ============')
+        print(f'\nDATE={date}   determined_campaign={determined_campaign}  date_row_number={date_row_number}\n ============')
         if determined_campaign == "Other":
             print(f'determine_campaign == "Other" ? {determined_campaign == "Other"}')
+            campaign_exp_sheet.format(f"{index + 2}:{index + 2}", {"backgroundColor": failure_color})
             continue
         if not determined_campaign:
             # If no matching campaign is found, skip this iteration
+            campaign_exp_sheet.format(f"{index + 2}:{index + 2}", {"backgroundColor": failure_color})
             raise ValueError(f"LINE 160 Campaign not found in INTERIM sheet {determined_campaign}.")
 
         # Prepare the update payload for each metric
@@ -283,7 +294,7 @@ def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
         # Calculate formulas for 'Total CPL' and 'cpComments'
         total_cpl_formula = f"=IF({leads_col_cell}<>0,{adspend_cell}/{leads_col_cell},0)"
         cp_comments_formula = f"=IFERROR({adspend_cell}/{total_comments_cell},0)"
-        percent_of_spend_formula = f"={adspend_cell}/B{date_row_number}"
+        percent_of_spend_formula = f"=IFERROR({adspend_cell}/B{date_row_number},0)"
 
         # Construct the update values
         update_values = [
@@ -302,7 +313,86 @@ def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
 
         # Update the 'InterimFB' sheet
         interim_campaigns_sheet.update(values=[update_values], range_name=f'{start_cell}:{end_cell}', value_input_option='USER_ENTERED')
+        # Mark as successfull export
+        campaign_exp_sheet.format(f"{index + 2}:{index + 2}", {"backgroundColor": success_color})
         time.sleep(2)
-        # raise ValueError(f"LINE 190  INTERIM sheet updated date_row_number={date_row_number}")
 
-    pauseMe("\n Step-2 finish \n")
+def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_column=None):
+    # Retrieve all data from the sheet
+    all_data = interim_campaigns_sheet.get_all_values()
+
+    # Calculate the starting index
+    start_index = column_letter_to_index(start_totals_column)
+    
+    # If last_column is provided, use it; otherwise, find dynamically
+    if last_column:
+        end_index = column_letter_to_index(last_column)
+    else:
+        # Determine the end index based on the condition
+        end_index=interim_campaigns_sheet.col_count
+    
+    # Loop through each row of data (skipping headers)
+    for i, row in enumerate(all_data[2:], start=3):  # Skip header rows
+        # Build the sum formulas for the specified range
+        sum_formulas = {
+            'ad_spend': [],
+            'impressions': [],
+            'leads': [],
+            'comments': []
+        }
+        
+        # Aggregate formulas for each metric
+        for col_offset in range(start_index+6, end_index, 7):
+            sum_formulas['ad_spend'].append(f'{column_index_to_string(col_offset)}{i}')
+            sum_formulas['impressions'].append(f'{column_index_to_string(col_offset + 1)}{i}')
+            sum_formulas['leads'].append(f'{column_index_to_string(col_offset + 2)}{i}')
+            sum_formulas['comments'].append(f'{column_index_to_string(col_offset + 3)}{i}')
+        
+        # Construct the final formulas
+        ad_spend_formula = '+'.join(sum_formulas['ad_spend'])
+        impressions_formula = '+'.join(sum_formulas['impressions'])
+        leads_formula = '+'.join(sum_formulas['leads'])
+        comments_formula = '+'.join(sum_formulas['comments'])
+        cpl_formula = f"=IF(SUM({leads_formula})<>0,SUM({ad_spend_formula})/SUM({leads_formula}),0)"
+        cp_comments_formula = f"=IF(SUM({comments_formula})<>0,SUM({ad_spend_formula})/SUM({comments_formula}),0)"
+        
+        # Update the sheet with the final formulas for each metric
+        update_range = f'{start_totals_column}{i}:{column_index_to_string(start_index + 6)}{i}'
+        interim_campaigns_sheet.update(update_range, [[
+            f"=SUM({ad_spend_formula})", 
+            f"=SUM({impressions_formula})", 
+            f"=SUM({leads_formula})", 
+            f"=SUM({comments_formula})", 
+            cpl_formula,
+            cp_comments_formula
+        ]], value_input_option='USER_ENTERED')
+        time.sleep(1)
+
+def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col=FB_TOTAL_COL, google_col=GOOGLE_TOTAL_COL):
+    # Retrieve all data from the sheet
+    all_data = interim_campaigns_sheet.get_all_values()
+    
+    # Calculate the column indices based on the provided column letters
+    fb_col_index = column_letter_to_index(fb_col)
+    google_col_index = column_letter_to_index(google_col)
+    total_col_index = column_letter_to_index(total_col)
+    
+    # Loop through the rows and calculate totals
+    for i, row in enumerate(all_data[2:], start=3):  # Skip header rows and adjust for 1-based indexing
+        # Formulas for "Total Ad Spend", "Impressions", "Leads", "Comments", "Total CPL", and "cpComments"
+        total_ad_formula = f"={fb_col}{i}+{google_col}{i}"
+        total_impressions_formula = f"={column_index_to_string(fb_col_index+1)}{i}+{column_index_to_string(google_col_index+1)}{i}"
+        total_leads_formula = f"={column_index_to_string(fb_col_index+2)}{i}+{column_index_to_string(google_col_index+2)}{i}"
+        total_comments_formula = f"={column_index_to_string(fb_col_index+3)}{i}+{column_index_to_string(google_col_index+3)}{i}"
+        total_cpl_formula = f"=IF({column_index_to_string(total_col_index+2)}{i}<>0,{column_index_to_string(total_col_index)}{i}/{column_index_to_string(total_col_index+2)}{i},0)"
+        cp_comments_formula = f"=IF({column_index_to_string(total_col_index+3)}{i}<>0,{column_index_to_string(total_col_index)}{i}/{column_index_to_string(total_col_index+3)}{i},0)"
+        
+        # Update the cells with formulas
+        interim_campaigns_sheet.update(f'{total_col}{i}:{column_index_to_string(total_col_index+5)}{i}', [[
+            total_ad_formula,
+            total_impressions_formula,
+            total_leads_formula,
+            total_comments_formula,
+            total_cpl_formula,
+            cp_comments_formula
+        ]], value_input_option='USER_ENTERED')
