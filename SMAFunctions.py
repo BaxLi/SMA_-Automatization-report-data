@@ -1,80 +1,13 @@
 from dateutil import parser
 import gspread
 import time
+import datetime
 from gspread.utils import column_letter_to_index
 from gspread.exceptions import WorksheetNotFound
 import pandas as pd
-from SMAGoogleAPICalls import total_summary_section_format, campaign_format_dates
+from SMAGoogleAPICalls import clear_sheet_formatting_and_content, add_left_right_borders_to_columns,add_borders_to_cells_only_allRows, add_up_down_borders_to_rows
 from SMA_Constants import fb_campaigns, google_campaigns, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL
-
-  
-
-def restructure_to_weekly(interim_campaigns_sheet, total_sheet):
-    # Fetch the data from 'interim_campaigns_sheet'
-    interim_data = interim_campaigns_sheet.get_all_values()
-    total_data = total_sheet.get_all_values()
-
-    # Headers are assumed to be in the first two rows
-    headers = [interim_data[0], interim_data[1]]
-
-    # Data is assumed to start from the third row
-    df_interim = pd.DataFrame(interim_data[2:], columns=headers[1])
-    df_total = pd.DataFrame(total_data[2:], columns=headers[1])
-    # Convert the 'Date' column to datetime if necessary
-    df_interim['Date'] = pd.to_datetime(df_interim['Date'])
-    df_total['Date'] = pd.to_datetime(df_total['Date'])
-
-    # Set 'Date' as the index for both DataFrames
-    df_interim.set_index('Date', inplace=True)
-    df_total.set_index('Date', inplace=True)
-
-    # Update df_total with df_interim entries; this will overwrite existing data in df_total with that in df_interim
-    # for matching dates. Non-matching dates in df_total will remain as is.
-    df_total.update(df_interim)
-    # Reset the index if you want 'Date' back as a column
-    df_total.reset_index(inplace=True)
-
-    df=df_total
-    print(df.iloc[3:5].to_string())
-    # Sort the dataframe by date
-    df.sort_values(by='Date', inplace=True)
-
-    # Initialize structured data with headers
-    structured_data = [headers[0]] + [headers[1]]
-
-    # Initialize tracking for the week of the year and month
-    previous_week = None
-    week_days_count = 0
-
-    for index, row in df.iterrows():
-        current_date = row['Date']
-        week_of_year = current_date.isocalendar().week
-        month_name = current_date.strftime('%B')
-
-        # Track the day count within the same week
-        if week_of_year == previous_week or previous_week is None:
-            week_days_count += 1
-        else:
-            # Append week label when moving to a new week
-            structured_data.append([f"{previous_month} Week {previous_week}"])
-            week_days_count = 1  # Reset counter for the new week
-
-        # Append daily data
-        structured_data.append([current_date.strftime('%A, %B %d, %Y')] + row[1:].tolist())
-
-        # Track previous day's week and month for comparison in the next iteration
-        previous_week = week_of_year
-        previous_month = month_name
-
-        # Check if it's the last row to append the week and total labels correctly
-        if index == len(df) - 1:
-            structured_data.append([f"{month_name} Week {week_of_year}"])  # Week label for the last week
-            structured_data.append([f"Total {month_name}"])  # Total label for the last month
-
-    # Clear the 'TOTAL' sheet before updating it with the new structured data
-    total_sheet.clear()
-    total_sheet.update('A1', structured_data, value_input_option='USER_ENTERED')
-
+ 
 def update_sheet_headers(worksheet, replacements):
     first_row_values = worksheet.row_values(1)
     new_first_row_values = [replacements.get(value, value) for value in first_row_values]
@@ -168,7 +101,6 @@ def step1_commonCampaignSheetCreate(spreadsheet):
 
     print(f'LINE 116 Finish FUNCTION STEP - 1  \n')
     pauseMe("Step-1 finish")
-
 
 def step1_v2_commonCampaignSheetCreate(spreadsheet):
     print(f'\n Line 144 -  Start step1_v2 function execution \n\n')
@@ -353,9 +285,13 @@ def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_colu
         impressions_formula = '+'.join(sum_formulas['impressions'])
         leads_formula = '+'.join(sum_formulas['leads'])
         comments_formula = '+'.join(sum_formulas['comments'])
-        cpl_formula = f"=IF(SUM({leads_formula})<>0,SUM({ad_spend_formula})/SUM({leads_formula}),0)"
-        cp_comments_formula = f"=IF(SUM({comments_formula})<>0,SUM({ad_spend_formula})/SUM({comments_formula}),0)"
+
+
+        cpl_formula = f"=IF({column_index_to_string(start_index+2)}{i}<>0,{column_index_to_string(start_index)}{i}/{column_index_to_string(start_index+2)}{i},0)"
+        cp_comments_formula = f"=IF({column_index_to_string(start_index+3)}{i}<>0,{column_index_to_string(start_index)}{i}/{column_index_to_string(start_index+3)}{i},0)"
         
+
+
         # Update the sheet with the final formulas for each metric
         update_range = f'{start_totals_column}{i}:{column_index_to_string(start_index + 6)}{i}'
         interim_campaigns_sheet.update(update_range, [[
@@ -396,3 +332,257 @@ def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col
             total_cpl_formula,
             cp_comments_formula
         ]], value_input_option='USER_ENTERED')
+
+def copy_Headers(interim_campaigns_sheet, total_sheet):
+    # Fetch the first two rows (headers) from 'interim_campaigns_sheet'
+    headers = interim_campaigns_sheet.get('A1:DF2')
+
+    # Update the 'total_sheet' with the headers
+    total_sheet.update('A1', headers, value_input_option='USER_ENTERED')
+
+def format_dates_in_column_a(total_sheet):
+    # Define the number format pattern for dates
+    # This pattern corresponds to "Sunday, January 21, 2024"
+    date_format_pattern = 'dddd, mmmm dd, yyyy'
+
+    # Calculate the range to apply the date format
+    # Assuming you want to format all cells starting from row 3 down to the last row with data
+    number_of_rows = len(total_sheet.get_all_values())
+    date_format_range = f'A3:A{number_of_rows}'
+
+    # Apply the date format to the range
+    total_sheet.format(date_format_range, {
+        "numberFormat": {
+            "type": "DATE",
+            "pattern": date_format_pattern
+        }
+    })
+
+def restructure_to_weekly_OLD(interim_campaigns_sheet, total_sheet):
+    # copy_Headers(interim_campaigns_sheet, total_sheet)
+
+    # # Fetch the data from 'interim_campaigns_sheet'
+    interim_data = interim_campaigns_sheet.get_all_values()
+    
+    #  # Clear the total sheet before updating it with new data
+    total_sheet.clear()
+    # # Update the total sheet with the data from the interim sheet
+    total_sheet.update('A1', interim_data, value_input_option='USER_ENTERED')
+    format_dates_in_column_a(total_sheet)
+
+    pauseMe("Yoyo")
+    # Headers are assumed to be in the first two rows
+    headers = interim_data[1]
+
+    # Data is assumed to start from the third row
+    # Create the DataFrame
+    df = pd.DataFrame(interim_data[2:], columns=headers)
+
+    # Convert the 'Date' column to datetime if necessary
+    df[('Date')] = pd.to_datetime(df[('Date')])
+
+    # Sort the DataFrame by date
+    df.sort_values(by=[('', 'Date')], inplace=True)
+
+    # Initialize structured data with headers
+    structured_data = [headers]
+
+    # Initialize tracking for the week of the year and month
+    previous_week = None
+    week_days_count = 0
+
+    for index, row in df.iterrows():
+        current_date = row['Date']
+        week_of_year = current_date.isocalendar().week
+        month_name = current_date.strftime('%B')
+
+        # Track the day count within the same week
+        if week_of_year == previous_week or previous_week is None:
+            week_days_count += 1
+        else:
+            # Append week label when moving to a new week
+            structured_data.append([f"{previous_month} Week {previous_week}"])
+            week_days_count = 1  # Reset counter for the new week
+
+        # Append daily data
+        structured_data.append([current_date.strftime('%A, %B %d, %Y')] + row[1:].tolist())
+
+        # Track previous day's week and month for comparison in the next iteration
+        previous_week = week_of_year
+        previous_month = month_name
+
+        # Check if it's the last row to append the week and total labels correctly
+        if index == len(df) - 1:
+            structured_data.append([f"{month_name} Week {week_of_year}"])  # Week label for the last week
+            structured_data.append([f"Total {month_name}"])  # Total label for the last month
+
+    # Clear the 'TOTAL' sheet before updating it with the new structured data
+    total_sheet.clear()
+    total_sheet.update('A1', structured_data, value_input_option='USER_ENTERED')
+
+def insert_week_and_month_totals(total_sheet):
+    # Fetch all the dates from column 'A', starting from row 3 to skip headers
+    dates = total_sheet.col_values(1)[2:]
+
+    # Keep track of how many rows have been inserted to adjust row indices accordingly
+    inserted_rows_count = 0
+
+    # Initialize the previous week number to None for comparison
+    previous_week_number = None
+
+    for i, date_str in enumerate(dates, start=3):
+        if date_str:  # Ensure the date string is not empty
+            # Convert the string to a datetime object
+            date_obj = datetime.datetime.strptime(date_str, '%A, %B %d, %Y')
+            current_week_number = date_obj.isocalendar()[1]
+            month = date_obj.month
+
+            # Determine if it's the last day of the month
+            next_day = date_obj + datetime.timedelta(days=1)
+            is_last_day_of_month = next_day.month != month
+
+            # Determine if the week number has changed (indicating a new week) or it's the last day of the month
+            if current_week_number != previous_week_number or is_last_day_of_month:
+                # Update the row index to account for previously inserted rows
+                adjusted_row_index = i + inserted_rows_count
+
+                # Insert a row for the current week number if it has changed
+                if (current_week_number != previous_week_number) & (previous_week_number is not None):
+                    total_sheet.insert_row(["Week - " + str(previous_week_number)], adjusted_row_index)
+                    # Insert the SUM formula for column B and replicate it across the row
+                    colB_Week_Sum(adjusted_row_index,  total_sheet)
+                    inserted_rows_count += 1  # Update the count of inserted rows
+                    adjusted_row_index += 1  # Adjust the row index for possible next insertion
+
+                # If it's the last day of the month, insert a row for month totals
+                if is_last_day_of_month:
+                    total_sheet.insert_row(["Week - " + str(current_week_number)], adjusted_row_index+1)
+                    # Insert the SUM formula for column B and replicate it across the row
+                    colB_Week_Sum(adjusted_row_index+1,  total_sheet)
+                    inserted_rows_count += 1  # Update the count of inserted rows
+                    adjusted_row_index += 1  # Adjust the row index for possible next insertion
+                    month_name = date_obj.strftime('%B')
+                    total_sheet.insert_row(["TOTAL " + month_name], adjusted_row_index+1)
+                    colB_Month_Sum(adjusted_row_index+1, total_sheet)
+                    inserted_rows_count += 1  # Update the count of inserted rows
+
+            # Update the previous week number for the next iteration
+            previous_week_number = current_week_number
+
+def colB_Month_Sum(row_index, mysheet):
+    print('colB_Month_Sum START')
+    idx=row_index-1
+    while (not mysheet.cell(idx, 1).value.startswith('TOTAL') or not mysheet.cell(idx, 1).value.startswith('Date')):
+        idx-=1
+        if idx<=3:
+            break
+    sum_formulas=[]
+    # Generate the formulas for the all columns starts from B
+    for col_index in range(2, mysheet.col_count ):  # Assuming total_sheet.col_count gives the number of columns
+        col_letter = column_index_to_string(col_index) # Convert column index to letter
+        sum_formula = f"=SUM({col_letter}{idx}:{col_letter}{row_index-1})/2"
+        sum_formulas.append(sum_formula)
+    range_to_update = f"B{row_index}:{column_index_to_string(mysheet.col_count - 1)}{row_index}"
+    mysheet.update(values=[sum_formulas],range_name=range_to_update, value_input_option='USER_ENTERED' )
+    time.sleep(1)
+    format_row_as_lightgrey_and_bold(mysheet, row_index, 0.7,1.0,0.7)
+    time.sleep(2)
+    add_up_down_borders_to_rows(mysheet, row_index, row_index, 2)
+
+def colB_Week_Sum(adjusted_row_index, total_sheet):
+    end_row = adjusted_row_index - 1
+    start_row = identify_non_numerical_cell_in_column_B(end_row, total_sheet)
+    sum_formulas = []
+        
+    # Generate the formulas for the remaining columns
+    for col_index in range(2, total_sheet.col_count ):  # Assuming total_sheet.col_count gives the number of columns
+        col_letter = column_index_to_string(col_index) #string.ascii_uppercase[col_index - 1]  # Convert column index to letter
+        sum_formula = f"=SUM({col_letter}{start_row+1}:{col_letter}{end_row})"
+        sum_formulas.append(sum_formula)
+
+    # Update the entire row with sum formulas in a single API call
+    range_to_update = f"B{adjusted_row_index}:{column_index_to_string(total_sheet.col_count - 1)}{adjusted_row_index}"
+    total_sheet.update(values=[sum_formulas],range_name=range_to_update, value_input_option='USER_ENTERED' )
+    time.sleep(2)
+    format_row_as_lightgrey_and_bold(total_sheet, adjusted_row_index)
+    time.sleep(2)
+    add_up_down_borders_to_rows(total_sheet, adjusted_row_index, adjusted_row_index, 1)
+
+def format_row_as_lightgrey_and_bold(total_sheet, adjusted_row_index, r=.9, g=.9, b=.9 , alpha=1):
+    print(f' COLOR ! - {adjusted_row_index} -{ column_index_to_string(total_sheet.col_count-1)}')
+    # Define the range for the entire row
+    row_range = f"A{adjusted_row_index}:{column_index_to_string(total_sheet.col_count-1)}{adjusted_row_index}"
+    cell_format = {
+        "backgroundColor": {
+            "red": r,
+            "green": g,
+            "blue": b,
+            "alpha": alpha
+        },
+        "textFormat": {
+            "bold": True
+        }
+    }
+    total_sheet.format(row_range, cell_format)
+
+def identify_non_numerical_cell_in_column_B(end_row,  mysheet=None):
+    start_row=2
+    for row in range(end_row, 3, -1):
+        cell_value = mysheet.cell(row, 1).value  # Assuming column B is column 2
+        if cell_value.startswith('Week') or  cell_value.startswith('TOTAL') or cell_value=='' or cell_value=='Date':
+            return row        
+    return start_row
+
+def restructure_to_weekly(interim_campaigns_sheet, total_sheet):
+    # Fetch the data from 'interim_campaigns_sheet'
+    interim_data = interim_campaigns_sheet.get_all_values()
+    print(f'SHEET ID={total_sheet.id}')
+
+    # Clear the total sheet before updating it with new data
+    clear_sheet_formatting_and_content(total_sheet)
+    copy_Headers(interim_campaigns_sheet, total_sheet)
+    # # Update the total sheet with the data from the interim sheet
+    total_sheet.update(range_name='A1', values=interim_data, value_input_option='USER_ENTERED')
+    
+    format_dates_in_column_a(total_sheet)
+    add_borders_to_cells_only_allRows(total_sheet, 1,total_sheet.col_count)
+    insert_week_and_month_totals(total_sheet)
+    merge_non_empty_columns_in_first_row(total_sheet)
+
+    pauseMe("Yoyo") 
+   
+
+
+def merge_non_empty_columns_in_first_row(mysheet):
+    # Get all values in the first row
+    first_row_values = mysheet.row_values(1)
+    # print(first_row_values)
+ # List to keep track of the column numbers of non-empty cells
+    columns_idx = [i  for i, value in enumerate(first_row_values) if value.strip()]  # 0-indexed for easier enumeration
+        # Adjust for 1-indexed column numbers and API usage
+    columns_idx = [idx + 1 for idx in columns_idx]
+    print(columns_idx)
+    # pauseMe(22)
+# Iterate over non-empty columns
+    for i, start_index in enumerate(columns_idx):
+        # If it's not the last non-empty cell, merge until the next non-empty cell
+        if i < len(columns_idx) - 1:
+            next_index = columns_idx[i + 1] - 1
+        else:  # For the last non-empty cell, merge it with the next 7 cells
+            next_index = start_index + 7
+            # Ensure not to exceed the total number of columns
+            next_index = min(next_index, len(first_row_values))
+        if next_index-start_index==0:
+            continue
+        print(f'start_index={start_index}   next_index={next_index} ')
+        # Convert column indexes to letters
+        start_col_letter = column_index_to_string(start_index)
+        end_col_letter = column_index_to_string(next_index)
+
+        # Define the range to merge
+        merge_range = f"{start_col_letter}1:{end_col_letter}1"
+        print(f'Merging range: {merge_range}')
+        mysheet.merge_cells(merge_range, merge_type='MERGE_ALL')
+        add_left_right_borders_to_columns(mysheet,start_index, next_index)
+        pauseMe(22)
+
