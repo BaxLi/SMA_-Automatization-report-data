@@ -243,6 +243,191 @@ def add_up_down_borders_to_rows(worksheet, start_row_index, end_row_index, borde
 
 
 
+def add_weekly_summary_chart(worksheet, chart_title="SPEND x Leads x CPL - Weekly"):
+    last_data_row_index = worksheet.row_count 
+    print(f'last_data_row_index={last_data_row_index}')
+
+    column_a_values = worksheet.col_values(1)
+    last_data_row_index = None
+
+    # Iterate in reverse to find the last occurrence
+    for index, value in reversed(list(enumerate(column_a_values))):
+        if value.startswith('Week'):
+            last_data_row_index = index + 1  # +1 because enumerate starts at 0
+            break
+
+    print(f'2 - last_data_row_index={last_data_row_index}')
+
+    # Define the chart request body
+    requests = {
+        "requests": [
+            {
+                "addChart": {
+                    "chart": {
+                        "spec": {
+                            "title": chart_title,
+                            "basicChart": {
+                                "chartType": "LINE",
+                                "legendPosition": "BOTTOM_LEGEND",
+                                "axis": [
+                                    {
+                                        "position": "BOTTOM_AXIS",
+                                        "title": "Weeks"
+                                    },
+                                    {
+                                        "position": "LEFT_AXIS",
+                                        "title": "Values"
+                                    }
+                                ],
+                                "domains": [
+                                    {
+                                        "domain": {
+                                            "sourceRange": {
+                                                "sources": [
+                                                    {
+                                                        "sheetId": worksheet.id,
+                                                        "startRowIndex": 1,  # Assuming header is in the first row
+                                                        "endRowIndex": last_data_row_index,
+                                                        "startColumnIndex": 0,  # Weeks column
+                                                        "endColumnIndex": 1
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ],
+                                "series": [
+                                    {
+                                        "series": {
+                                            "sourceRange": {
+                                                "sources": [
+                                                    {
+                                                        "sheetId": worksheet.id,
+                                                        "startRowIndex": 1,  # Assuming header is in the first row
+                                                        "endRowIndex": last_data_row_index,
+                                                        "startColumnIndex": i,
+                                                        "endColumnIndex": i + 1
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "targetAxis": "LEFT_AXIS"
+                                    } for i in range(1, 7)  # Assuming you have 20 columns of data
+                                ],
+                                "headerCount": 1
+                            }
+                        },
+                        "position": {
+                            "overlayPosition": {
+                                "anchorCell": {
+                                    "sheetId": worksheet.id,
+                                    "rowIndex": last_data_row_index+5,  # Positioning the chart after the last row of data and empty rows
+                                    "columnIndex": 1  # Starting from the first column
+                                },
+                                "offsetXPixels": 0,  # Adjust as needed
+                                "offsetYPixels": 0   # Adjust as needed
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+    }
+
+    # Send the request to the API
+    response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
+
+
+def add_chart_to_sheet(worksheet, chart_title, data_column_letter,
+                    chart_place_to_row=15, chart_place_to_col=2):
+    last_data_row_index = worksheet.row_count 
+    print(f'last_data_row_index={last_data_row_index}')
+
+    # Define the chart request body
+    requests = {
+        "requests": [
+            {
+                "addChart": {
+                    "chart": {
+                        "spec": {
+                            "title": chart_title,
+                            "basicChart": {
+                                "chartType": "LINE",
+                                "legendPosition": "BOTTOM_LEGEND",
+                                "axis": [
+                                    {
+                                        "position": "BOTTOM_AXIS",
+                                        "title": "Weeks"
+                                    },
+                                    {
+                                        "position": "LEFT_AXIS",
+                                        "title": "Values"
+                                    }
+                                ],
+                                "domains": [
+                                    {
+                                        "domain": {
+                                            "sourceRange": {
+                                                "sources": [
+                                                    {
+                                                        "sheetId": worksheet.id,
+                                                        "startRowIndex": 1,  # Assuming header is in the first row
+                                                        "endRowIndex": last_data_row_index,
+                                                        "startColumnIndex": 0,  # Weeks column
+                                                        "endColumnIndex": 1
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ],
+                                "series": [
+                                    {
+                                        "series": {
+                                            "sourceRange": {
+                                                "sources": [
+                                                    {
+                                                        "sheetId": worksheet.id,
+                                                        "startRowIndex": 1,  # Assuming header is in the first row
+                                                        "endRowIndex": last_data_row_index,
+                                                        "startColumnIndex": column_letter_to_index(data_column_letter)-1,
+                                                        "endColumnIndex": column_letter_to_index(data_column_letter)
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "targetAxis": "LEFT_AXIS"
+                                    } 
+                                ],
+                                "headerCount": 1
+                            }
+                        },
+                        "position": {
+                            "overlayPosition": {
+                                "anchorCell": {
+                                    "sheetId": worksheet.id,
+                                    "rowIndex": chart_place_to_row,  # Positioning the chart after the last row of data and empty rows
+                                    "columnIndex": chart_place_to_col  # Starting from the first column
+                                },
+                                "offsetXPixels": 0,  # Adjust as needed
+                                "offsetYPixels": 0   # Adjust as needed
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+    }
+
+    # Send the request to the API
+    response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
+    return response  # Return the API response for further processing if necessary
+
+
+
+
+
+
 
 
 

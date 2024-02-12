@@ -1,11 +1,12 @@
 from dateutil import parser
 import gspread
+import pandas as pd
 import time
 import datetime
 from gspread.utils import column_letter_to_index
 from gspread.exceptions import WorksheetNotFound
 import pandas as pd
-from SMAGoogleAPICalls import clear_sheet_formatting_and_content, add_left_right_borders_to_columns,add_borders_to_cells_only_allRows, add_up_down_borders_to_rows
+from SMAGoogleAPICalls import add_chart_to_sheet, add_weekly_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,add_borders_to_cells_only_allRows, add_up_down_borders_to_rows
 from SMA_Constants import fb_campaigns, google_campaigns, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL
  
 def update_sheet_headers(worksheet, replacements):
@@ -429,8 +430,11 @@ def insert_week_and_month_totals(total_sheet):
 
     # Initialize the previous week number to None for comparison
     previous_week_number = None
+    dates_pairs = zip(dates, dates[1:] + [None])
 
-    for i, date_str in enumerate(dates, start=3):
+    for i, (date_str, next_date_str) in enumerate(dates_pairs, start=3):
+        if (next_date_str==None):
+            continue
         if date_str:  # Ensure the date string is not empty
             # Convert the string to a datetime object
             date_obj = datetime.datetime.strptime(date_str, '%A, %B %d, %Y')
@@ -438,8 +442,10 @@ def insert_week_and_month_totals(total_sheet):
             month = date_obj.month
 
             # Determine if it's the last day of the month
-            next_day = date_obj + datetime.timedelta(days=1)
+            # next_day = date_obj + datetime.timedelta(days=1)
+            next_day = datetime.datetime.strptime(next_date_str, '%A, %B %d, %Y')
             is_last_day_of_month = next_day.month != month
+            print(f' ---->     month={month} nextDay={next_day} is_last_day_of_month={is_last_day_of_month} \n')
 
             # Determine if the week number has changed (indicating a new week) or it's the last day of the month
             if current_week_number != previous_week_number or is_last_day_of_month:
@@ -447,7 +453,7 @@ def insert_week_and_month_totals(total_sheet):
                 adjusted_row_index = i + inserted_rows_count
 
                 # Insert a row for the current week number if it has changed
-                if (current_week_number != previous_week_number) & (previous_week_number is not None):
+                if (current_week_number != previous_week_number) & (previous_week_number is not None) & (not is_last_day_of_month):
                     total_sheet.insert_row(["Week - " + str(previous_week_number)], adjusted_row_index)
                     # Insert the SUM formula for column B and replicate it across the row
                     colB_Week_Sum(adjusted_row_index,  total_sheet)
@@ -456,6 +462,7 @@ def insert_week_and_month_totals(total_sheet):
 
                 # If it's the last day of the month, insert a row for month totals
                 if is_last_day_of_month:
+                    print(f' Last day of Month ! \n')
                     total_sheet.insert_row(["Week - " + str(current_week_number)], adjusted_row_index+1)
                     # Insert the SUM formula for column B and replicate it across the row
                     colB_Week_Sum(adjusted_row_index+1,  total_sheet)
@@ -501,6 +508,7 @@ def colB_Week_Sum(adjusted_row_index, total_sheet):
         sum_formulas.append(sum_formula)
 
     # Update the entire row with sum formulas in a single API call
+    print(f' total_sheet.col_count - {total_sheet.col_count}')
     range_to_update = f"B{adjusted_row_index}:{column_index_to_string(total_sheet.col_count - 1)}{adjusted_row_index}"
     total_sheet.update(values=[sum_formulas],range_name=range_to_update, value_input_option='USER_ENTERED' )
     time.sleep(2)
@@ -552,7 +560,6 @@ def restructure_to_weekly(interim_campaigns_sheet, total_sheet):
     pauseMe("Yoyo") 
    
 
-
 def merge_non_empty_columns_in_first_row(mysheet):
     # Get all values in the first row
     first_row_values = mysheet.row_values(1)
@@ -584,5 +591,102 @@ def merge_non_empty_columns_in_first_row(mysheet):
         print(f'Merging range: {merge_range}')
         mysheet.merge_cells(merge_range, merge_type='MERGE_ALL')
         add_left_right_borders_to_columns(mysheet,start_index, next_index)
-        pauseMe(22)
+        # pauseMe(22)
+
+
+def create_weeks_summary_sheet(spreadsheet, source_sheet):
+    COLUMNS_TO_COPY=7
+   # Get all the data from the source sheet
+    source_data = source_sheet.get_all_values()
+    # print(source_data)
+
+    week_data_aggregated = {}
+    # Filter out the rows where column A starts with 'Week' and aggregate the data
+    for row in source_data:
+        if row[0].startswith('Week'):
+            week_number = row[0].split('-')[1].strip()  # Extract the week number
+            if week_number not in week_data_aggregated:
+                 week_data_aggregated[week_number] = [
+                    row[0]] + [float(value.replace('€', '').replace(',', '').strip()) if value.replace('€', '').replace(',', '').strip().replace('.', '', 1).isdigit() else value
+                    for i, value in enumerate(row[1:COLUMNS_TO_COPY], 1)]
+            else:
+    # Sum up subsequent occurrences
+                for i in range(1, COLUMNS_TO_COPY):  # Start at 1 to skip the 'Week' label
+                    if row[i].strip():  # Check if the cell has a value
+                        # Sum the values after converting them to float where applicable
+                        if row[i].replace('€', '').replace(',', '').strip().replace('.', '', 1).isdigit():
+                            week_data_aggregated[week_number][i] += float(row[i].replace('€', '').replace(',', '').strip())
+                        else:
+                            week_data_aggregated[week_number][i] = row[i]
+
+    # Create 'WeeksSummary' sheet or clear it if it already exists
+    try:
+        weeks_summary_sheet = spreadsheet.worksheet('WeeksSummary')
+        spreadsheet.del_worksheet(weeks_summary_sheet)
+    except gspread.WorksheetNotFound:
+        pass
+
+    weeks_summary_sheet = spreadsheet.add_worksheet(title='WeeksSummary', rows=str(len(week_data_aggregated)), cols="20")
+
+    # Prepare the data to be inserted into 'WeeksSummary'
+    # Initialize with headers or other required data
+    data_to_insert = [source_data[0][:COLUMNS_TO_COPY],source_data[1][:COLUMNS_TO_COPY]]  # Replace with actual headers if needed
+
+   # Add the aggregated week data to the data_to_insert list
+    for week_number, aggregated_data in sorted(week_data_aggregated.items()):
+        data_to_insert.append(aggregated_data)
+    # Add five empty rows after the last row of data
+    for _ in range(250):
+        data_to_insert.append(['' for _ in range(COLUMNS_TO_COPY)])
+    weeks_summary_sheet.update( values=data_to_insert, range_name=f'A1:T{str(len(data_to_insert))}', value_input_option='USER_ENTERED')
+
+    # add_weekly_summary_chart(weeks_summary_sheet)
+    # add_chart_to_sheet(weeks_summary_sheet,'AD SPend', 'B', 0,10)
+    # add_chart_to_sheet(weeks_summary_sheet,'Impressions', 'C', 18,10)
+    # add_chart_to_sheet(weeks_summary_sheet,'Leads', 'D', 36,10)
+
+    normalize_data(spreadsheet, weeks_summary_sheet)
+    normalized_weeks_summary_sheet = spreadsheet.worksheet("Normalized Data")
+    add_weekly_summary_chart(normalized_weeks_summary_sheet)
+
+# Function to normalize values
+def normalize_data(spreadsheet, sheet):
+    # Get all the data from the sheet
+    data = sheet.get_all_values()
+    
+    # Convert to a DataFrame
+    df = pd.DataFrame(data)
+    
+    # # Assuming the first row is the header
+    header = df.iloc[0]  # This is the header row
+    header2 = df.iloc[1]  # This is the header row
+    df.columns = df.iloc[1]
+    df = df[2:]
+    
+    # Convert numeric columns to float
+    numeric_columns = df.columns.drop('Date')
+    df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
+    
+    # Normalize the numeric columns (except 'Date')
+    df_normalized = df.copy()
+    for column in numeric_columns:
+        df_normalized[column] = (df[column] - df[column].min()) / (df[column].max() - df[column].min())
+    
+  # Check if a sheet named 'Normalized Data' exists
+    try:
+        normalized_sheet = spreadsheet.worksheet('Normalized Data')
+        normalized_sheet.clear()
+    except gspread.WorksheetNotFound:
+        # If it does not exist, create a new sheet
+        normalized_sheet = spreadsheet.add_worksheet(title="Normalized Data", rows=df_normalized.shape[0]+10, cols=len(df_normalized.columns)+10)
+   
+    # Prepare the data for update, including the header
+    normalized_data = [header.values.tolist()] + [header2.values.tolist()] + df_normalized.values.tolist()
+
+ # Update the sheet with normalized data
+    normalized_sheet.update(normalized_data, value_input_option='USER_ENTERED')
+
+    return df_normalized
+
+
 
