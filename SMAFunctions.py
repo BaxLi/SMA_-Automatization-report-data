@@ -2,13 +2,72 @@ from dateutil import parser
 import gspread
 import pandas as pd
 import time
-import datetime
+from datetime import datetime, timedelta
 from gspread.utils import column_letter_to_index
 from gspread.exceptions import WorksheetNotFound
 import pandas as pd
-from SMAGoogleAPICalls import add_chart_to_sheet, add_weekly_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,add_borders_to_cells_only_allRows, add_up_down_borders_to_rows
-from SMA_Constants import fb_campaigns, google_campaigns, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL
- 
+from SMAGoogleAPICalls import (add_chart_to_sheet, add_weekly_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,
+                                add_borders_to_cells_only_allRows, add_up_down_borders_to_rows)
+from SMA_Constants import (fb_campaigns, google_campaigns, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL, INTERIM_SHEET_DATA)
+
+# Helper function to standardize date format, e.g., '2024-01-31'
+def standardize_date(date_str):
+    try:
+        # This assumes the date format in the sheet is like '2024-01-31'
+        # Adjust the date format if it's different
+        return datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+    except ValueError as e:
+        print(f"Error parsing date: {e}")
+        return None
+
+def find_insert_position(sorted_dates, new_date, delta=INTERIM_SHEET_DATA):
+    """Find the correct position to insert a new date in a sorted list of dates."""
+    for i, current_date in enumerate(sorted_dates):
+        if new_date < current_date:
+            return i+1+delta  # +2 to adjust for 1-based indexing and header row in Google Sheets
+    return len(sorted_dates) + 1+delta # If new_date is latest, insert at the end
+
+def fillInterimCampaignsDataColumn(interim, toexport):
+    toexport_dates =  toexport.col_values(1)[1:]
+    interim_dates = interim.col_values(1)[INTERIM_SHEET_DATA:] 
+
+    # Convert the interim dates to string format for comparison
+    toexport_dates  = sorted([standardize_date(date) for date in toexport_dates])
+    sorted_interim_dates  = sorted([standardize_date(date) for date in interim_dates])
+    # print(f'interim_dates_str={sorted_interim_dates }')
+
+    latest_date = max(sorted_interim_dates + toexport_dates)
+    earliest_date = standardize_date('2024-01-01')
+
+    # Generate all dates from earliest to latest
+    dt=[earliest_date + timedelta(days=i) for i in range((latest_date - earliest_date).days + 1)]
+    all_dates = reversed(dt)
+    # print(f'alldates={dt}')
+
+    # Determine the number of rows to add if there aren't enough
+    rows_to_add = len(dt) - interim.row_count + INTERIM_SHEET_DATA - 1  # Subtract the number of existing rows and adjust for the header
+    need_to_delete_Latest=False
+    if rows_to_add>0:
+        interim.append_row([0]*1)
+        need_to_delete_Latest=True
+
+    # Find and insert missing dates
+    for date in all_dates:
+        if date not in sorted_interim_dates :
+            formatted_date = date.strftime("%Y-%m-%d")
+            print(f"Inserting missed date: {formatted_date}")
+            # Find the correct position (row index) to insert the new date
+            # Determine where to insert the new date
+            position_to_insert = find_insert_position(interim_dates, formatted_date)
+            interim.insert_row([formatted_date], position_to_insert)
+            # Note: This example inserts at the end. You might want to adjust the insertion logic.
+
+            # Update the sorted_interim_dates list to include the newly added date
+            sorted_interim_dates .append(date)
+            sorted_interim_dates .sort()  # Ensure the list is sorted after insertion
+    if need_to_delete_Latest:
+        interim.delete_rows(interim.row_count)
+
 def update_sheet_headers(worksheet, replacements):
     first_row_values = worksheet.row_values(1)
     new_first_row_values = [replacements.get(value, value) for value in first_row_values]
@@ -291,8 +350,6 @@ def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_colu
         cpl_formula = f"=IF({column_index_to_string(start_index+2)}{i}<>0,{column_index_to_string(start_index)}{i}/{column_index_to_string(start_index+2)}{i},0)"
         cp_comments_formula = f"=IF({column_index_to_string(start_index+3)}{i}<>0,{column_index_to_string(start_index)}{i}/{column_index_to_string(start_index+3)}{i},0)"
         
-
-
         # Update the sheet with the final formulas for each metric
         update_range = f'{start_totals_column}{i}:{column_index_to_string(start_index + 6)}{i}'
         interim_campaigns_sheet.update(update_range, [[
@@ -339,7 +396,7 @@ def copy_Headers(interim_campaigns_sheet, total_sheet):
     headers = interim_campaigns_sheet.get('A1:DF2')
 
     # Update the 'total_sheet' with the headers
-    total_sheet.update('A1', headers, value_input_option='USER_ENTERED')
+    total_sheet.update(values=headers, range_name='A1',  value_input_option='USER_ENTERED')
 
 def format_dates_in_column_a(total_sheet):
     # Define the number format pattern for dates
@@ -423,7 +480,7 @@ def restructure_to_weekly_OLD(interim_campaigns_sheet, total_sheet):
 
 def insert_week_and_month_totals(total_sheet):
     # Fetch all the dates from column 'A', starting from row 3 to skip headers
-    dates = total_sheet.col_values(1)[2:]
+    dates = total_sheet.col_values(1)[INTERIM_SHEET_DATA:]
 
     # Keep track of how many rows have been inserted to adjust row indices accordingly
     inserted_rows_count = 0
@@ -437,13 +494,12 @@ def insert_week_and_month_totals(total_sheet):
             continue
         if date_str:  # Ensure the date string is not empty
             # Convert the string to a datetime object
-            date_obj = datetime.datetime.strptime(date_str, '%A, %B %d, %Y')
+            date_obj = datetime.strptime(date_str, '%A, %B %d, %Y')
             current_week_number = date_obj.isocalendar()[1]
             month = date_obj.month
 
             # Determine if it's the last day of the month
-            # next_day = date_obj + datetime.timedelta(days=1)
-            next_day = datetime.datetime.strptime(next_date_str, '%A, %B %d, %Y')
+            next_day = datetime.strptime(next_date_str, '%A, %B %d, %Y')
             is_last_day_of_month = next_day.month != month
             print(f' ---->     month={month} nextDay={next_day} is_last_day_of_month={is_last_day_of_month} \n')
 
@@ -455,8 +511,10 @@ def insert_week_and_month_totals(total_sheet):
                 # Insert a row for the current week number if it has changed
                 if (current_week_number != previous_week_number) & (previous_week_number is not None) & (not is_last_day_of_month):
                     total_sheet.insert_row(["Week - " + str(previous_week_number)], adjusted_row_index)
+                    time.sleep(2)
                     # Insert the SUM formula for column B and replicate it across the row
                     colB_Week_Sum(adjusted_row_index,  total_sheet)
+                    time.sleep(1)
                     inserted_rows_count += 1  # Update the count of inserted rows
                     adjusted_row_index += 1  # Adjust the row index for possible next insertion
 
@@ -464,12 +522,15 @@ def insert_week_and_month_totals(total_sheet):
                 if is_last_day_of_month:
                     print(f' Last day of Month ! \n')
                     total_sheet.insert_row(["Week - " + str(current_week_number)], adjusted_row_index+1)
+                    time.sleep(1)
                     # Insert the SUM formula for column B and replicate it across the row
                     colB_Week_Sum(adjusted_row_index+1,  total_sheet)
                     inserted_rows_count += 1  # Update the count of inserted rows
                     adjusted_row_index += 1  # Adjust the row index for possible next insertion
                     month_name = date_obj.strftime('%B')
+                    time.sleep(1)
                     total_sheet.insert_row(["TOTAL " + month_name], adjusted_row_index+1)
+                    time.sleep(1)
                     colB_Month_Sum(adjusted_row_index+1, total_sheet)
                     inserted_rows_count += 1  # Update the count of inserted rows
 
@@ -478,12 +539,15 @@ def insert_week_and_month_totals(total_sheet):
 
 def colB_Month_Sum(row_index, mysheet):
     print('colB_Month_Sum START')
-    idx=row_index-1
-    while (not mysheet.cell(idx, 1).value.startswith('TOTAL') or not mysheet.cell(idx, 1).value.startswith('Date')):
-        idx-=1
-        if idx<=3:
-            break
-    sum_formulas=[]
+    # Fetch the entire first column at once
+    first_col_values = mysheet.col_values(1)
+
+    # Find the start index
+    idx = row_index - 1  # Adjusted for zero-based indexing in Python
+    while idx > 2 and not (first_col_values[idx-1].startswith('TOTAL') or first_col_values[idx-1].startswith('Date')):
+        idx -= 1
+    idx=idx+1
+    sum_formulas = []
     # Generate the formulas for the all columns starts from B
     for col_index in range(2, mysheet.col_count ):  # Assuming total_sheet.col_count gives the number of columns
         col_letter = column_index_to_string(col_index) # Convert column index to letter
@@ -531,6 +595,7 @@ def format_row_as_lightgrey_and_bold(total_sheet, adjusted_row_index, r=.9, g=.9
             "bold": True
         }
     }
+    time.sleep(1)
     total_sheet.format(row_range, cell_format)
 
 def identify_non_numerical_cell_in_column_B(end_row,  mysheet=None):
@@ -541,24 +606,36 @@ def identify_non_numerical_cell_in_column_B(end_row,  mysheet=None):
             return row        
     return start_row
 
-def restructure_to_weekly(interim_campaigns_sheet, total_sheet):
+def restructure_to_weekly(interim_campaigns_sheet,spreadsheet, sheet_name):
+    try:
+        # Try to open the worksheet by title
+        new_worksheet=spreadsheet.worksheet(sheet_name)
+    except gspread.WorksheetNotFound:
+        # If the worksheet does not exist, create it
+        new_worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
+        # Move the newly created sheet to the first position
+        spreadsheet.reorder_worksheets([new_worksheet.id] + [ws.id for ws in spreadsheet.worksheets() if ws.title != sheet_name])
     # Fetch the data from 'interim_campaigns_sheet'
     interim_data = interim_campaigns_sheet.get_all_values()
-    print(f'SHEET ID={total_sheet.id}')
+    # print(f'SHEET ID={new_worksheet.id}')
 
     # Clear the total sheet before updating it with new data
-    clear_sheet_formatting_and_content(total_sheet)
-    copy_Headers(interim_campaigns_sheet, total_sheet)
+    clear_sheet_formatting_and_content(new_worksheet)
+    time.sleep(2)
+    copy_Headers(interim_campaigns_sheet, new_worksheet)
+    time.sleep(2)
     # # Update the total sheet with the data from the interim sheet
-    total_sheet.update(range_name='A1', values=interim_data, value_input_option='USER_ENTERED')
-    
-    format_dates_in_column_a(total_sheet)
-    add_borders_to_cells_only_allRows(total_sheet, 1,total_sheet.col_count)
-    insert_week_and_month_totals(total_sheet)
-    merge_non_empty_columns_in_first_row(total_sheet)
-
-    pauseMe("Yoyo") 
-   
+    new_worksheet.update(range_name='A1', values=interim_data, value_input_option='USER_ENTERED')
+    time.sleep(2)
+    format_dates_in_column_a(new_worksheet)
+    time.sleep(2)
+    add_borders_to_cells_only_allRows(new_worksheet, 1,new_worksheet.col_count)
+    time.sleep(2)
+    insert_week_and_month_totals(new_worksheet)
+    time.sleep(2)
+    merge_non_empty_columns_in_first_row(new_worksheet)   
+    format_row_as_lightgrey_and_bold(new_worksheet, 1, 0.0,0.9,1.0)
+    new_worksheet.freeze(rows=2)
 
 def merge_non_empty_columns_in_first_row(mysheet):
     # Get all values in the first row
@@ -569,7 +646,7 @@ def merge_non_empty_columns_in_first_row(mysheet):
         # Adjust for 1-indexed column numbers and API usage
     columns_idx = [idx + 1 for idx in columns_idx]
     print(columns_idx)
-    # pauseMe(22)
+
 # Iterate over non-empty columns
     for i, start_index in enumerate(columns_idx):
         # If it's not the last non-empty cell, merge until the next non-empty cell
@@ -592,11 +669,11 @@ def merge_non_empty_columns_in_first_row(mysheet):
         mysheet.merge_cells(merge_range, merge_type='MERGE_ALL')
         add_left_right_borders_to_columns(mysheet,start_index, next_index)
         # pauseMe(22)
-
+    
 
 def create_weeks_summary_sheet(spreadsheet, source_sheet):
     COLUMNS_TO_COPY=7
-   # Get all the data from the source sheet
+#    Get all the data from the source sheet
     source_data = source_sheet.get_all_values()
     # print(source_data)
 
@@ -640,53 +717,65 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
         data_to_insert.append(['' for _ in range(COLUMNS_TO_COPY)])
     weeks_summary_sheet.update( values=data_to_insert, range_name=f'A1:T{str(len(data_to_insert))}', value_input_option='USER_ENTERED')
 
-    # add_weekly_summary_chart(weeks_summary_sheet)
-    # add_chart_to_sheet(weeks_summary_sheet,'AD SPend', 'B', 0,10)
-    # add_chart_to_sheet(weeks_summary_sheet,'Impressions', 'C', 18,10)
-    # add_chart_to_sheet(weeks_summary_sheet,'Leads', 'D', 36,10)
+    add_weekly_summary_chart(weeks_summary_sheet)
+    add_chart_to_sheet(weeks_summary_sheet,'AD SPend', 'B', 0,10)
+    add_chart_to_sheet(weeks_summary_sheet,'Impressions', 'C', 18,10)
+    add_chart_to_sheet(weeks_summary_sheet,'Leads', 'D', 36,10)
 
     normalize_data(spreadsheet, weeks_summary_sheet)
-    normalized_weeks_summary_sheet = spreadsheet.worksheet("Normalized Data")
-    add_weekly_summary_chart(normalized_weeks_summary_sheet)
-
+    
 # Function to normalize values
 def normalize_data(spreadsheet, sheet):
     # Get all the data from the sheet
     data = sheet.get_all_values()
-    
     # Convert to a DataFrame
     df = pd.DataFrame(data)
-    
     # # Assuming the first row is the header
     header = df.iloc[0]  # This is the header row
     header2 = df.iloc[1]  # This is the header row
     df.columns = df.iloc[1]
     df = df[2:]
-    
     # Convert numeric columns to float
     numeric_columns = df.columns.drop('Date')
     df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
-    
     # Normalize the numeric columns (except 'Date')
     df_normalized = df.copy()
     for column in numeric_columns:
         df_normalized[column] = (df[column] - df[column].min()) / (df[column].max() - df[column].min())
     
+    increments = {
+        'Impressions': 1,
+        'Total Leads': 2,
+        'Total Comments': 3,
+        'Total CPL': 4,
+        'Total cpComments': 5,
+        # Add more if needed, like 'Total cpComments': X, where X is the increment for that column
+    }
+
+    # Add the increments to each column's values
+    for column, increment in increments.items():
+        if column in df_normalized.columns:
+            df_normalized[column] = df_normalized[column] + increment
+
   # Check if a sheet named 'Normalized Data' exists
     try:
         normalized_sheet = spreadsheet.worksheet('Normalized Data')
-        normalized_sheet.clear()
+        spreadsheet.del_worksheet(normalized_sheet)
     except gspread.WorksheetNotFound:
         # If it does not exist, create a new sheet
-        normalized_sheet = spreadsheet.add_worksheet(title="Normalized Data", rows=df_normalized.shape[0]+10, cols=len(df_normalized.columns)+10)
-   
+        pass
+    normalized_sheet = spreadsheet.add_worksheet(title="Normalized Data", rows=df_normalized.shape[0]+10, cols=len(df_normalized.columns)+10)
     # Prepare the data for update, including the header
     normalized_data = [header.values.tolist()] + [header2.values.tolist()] + df_normalized.values.tolist()
 
  # Update the sheet with normalized data
-    normalized_sheet.update(normalized_data, value_input_option='USER_ENTERED')
+    normalized_sheet.update(values=normalized_data, value_input_option='USER_ENTERED') #started range = A1 !
+    add_weekly_summary_chart(normalized_sheet)
 
     return df_normalized
+
+
+
 
 
 

@@ -46,7 +46,7 @@ def total_summary_section_format(date_row, workbook_id=None, service=None, start
 
      # Calculate the starting index from the column letter
     start_col_index = column_letter_to_index(start_col)-2 if start_col is not None else 0
-    print(f'{start_col}+1=Index {start_col_index}')
+    # print(f'{start_col}+1=Index {start_col_index}')
 
     # Define column formats in a more maintainable structure
     column_formats = [
@@ -189,7 +189,6 @@ def add_left_right_borders_to_columns(worksheet, start_col_index, end_col_index,
     }
     service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
 
-
 def add_up_down_borders_to_rows(worksheet, start_row_index, end_row_index, border_width=1, service=service):
     """
     Add left border to the starting column and right border to the ending column
@@ -239,9 +238,6 @@ def add_up_down_borders_to_rows(worksheet, start_row_index, end_row_index, borde
         ]
     }
     service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
-
-
-
 
 def add_weekly_summary_chart(worksheet, chart_title="SPEND x Leads x CPL - Weekly"):
     last_data_row_index = worksheet.row_count 
@@ -322,7 +318,7 @@ def add_weekly_summary_chart(worksheet, chart_title="SPEND x Leads x CPL - Weekl
                                 "anchorCell": {
                                     "sheetId": worksheet.id,
                                     "rowIndex": last_data_row_index+5,  # Positioning the chart after the last row of data and empty rows
-                                    "columnIndex": 1  # Starting from the first column
+                                    "columnIndex": 10  # Starting from the first column
                                 },
                                 "offsetXPixels": 0,  # Adjust as needed
                                 "offsetYPixels": 0   # Adjust as needed
@@ -336,7 +332,6 @@ def add_weekly_summary_chart(worksheet, chart_title="SPEND x Leads x CPL - Weekl
 
     # Send the request to the API
     response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
-
 
 def add_chart_to_sheet(worksheet, chart_title, data_column_letter,
                     chart_place_to_row=15, chart_place_to_col=2):
@@ -422,6 +417,9 @@ def add_chart_to_sheet(worksheet, chart_title, data_column_letter,
     # Send the request to the API
     response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
     return response  # Return the API response for further processing if necessary
+
+
+
 
 
 

@@ -32,6 +32,7 @@ google_campaigns = [
 ]
 
 interim_campaigns_sheet_name='InterimCampaigns'
+INTERIM_SHEET_DATA=2
 commonExportedCampaignsSheet='campaign_exp_sheet'
 TOTAL_TOTAL_COL='B'
 FB_TOTAL_COL='H'
