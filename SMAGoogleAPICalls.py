@@ -1,7 +1,7 @@
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from SMAFunctions import column_letter_to_index
+from SMAFunctions import (column_letter_to_index)
 from SMA_Constants import CREDENTIALS
 
 SERVICE_ACCOUNT_FILE = 'sma-automatization-d95cdc6c39de.json'
@@ -71,6 +71,7 @@ def campaign_format_dates(date_row, workbook_id=None, service=None, start_col=No
     start_column = 14 if start_col is None else start_col
     step = 7
     number_of_sets = 8 if nr_sets is None else nr_sets
+    print(f'campaign_format_dates: start_column={start_column}')
     column_formats = [
         ("CURRENCY", '"€"#,##0.00'),  # Ad Spend
         ("NUMBER", "#0"),             # Impressions

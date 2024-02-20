@@ -17,7 +17,7 @@ CREDENTIALS = Credentials.from_service_account_file(
     scopes=['https://www.googleapis.com/auth/spreadsheets']
 )
 
-fb_campaigns = [
+FB_CAMPAIGNS = [
     "BAU | Control_AdSet",
     "BAU | DC Type",
     "BAU | LLAs",
@@ -25,9 +25,9 @@ fb_campaigns = [
     "BAU | Lead Generation",
     "BAU | PPE",
     "BAU | Page Likes",
-    "nBAU | Facebook"
+    "nBAU | FB"
 ]
-google_campaigns = [
+GOOGLE_CAMPAIGNS = [
     "Brand Protect | MCPC","Denti Fissi | MCPC -19.12", "Main KW | MCPC - 19.12", "nBAU | Google"
 ]
 

@@ -1,14 +1,14 @@
 from dateutil import parser
-import gspread
 import pandas as pd
 import time
 from datetime import datetime, timedelta
 from gspread.utils import column_letter_to_index
+import gspread
 from gspread.exceptions import WorksheetNotFound
 import pandas as pd
 from SMAGoogleAPICalls import (add_chart_to_sheet, add_weekly_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,
                                 add_borders_to_cells_only_allRows, add_up_down_borders_to_rows)
-from SMA_Constants import (fb_campaigns, google_campaigns, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL, INTERIM_SHEET_DATA)
+from SMA_Constants import (FB_CAMPAIGNS, GOOGLE_CAMPAIGNS, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL, INTERIM_SHEET_DATA)
 
 # Helper function to standardize date format, e.g., '2024-01-31'
 def standardize_date(date_str):
@@ -60,13 +60,63 @@ def fillInterimCampaignsDataColumn(interim, toexport):
             # Determine where to insert the new date
             position_to_insert = find_insert_position(interim_dates, formatted_date)
             interim.insert_row([formatted_date], position_to_insert)
+            time.sleep(1)
             # Note: This example inserts at the end. You might want to adjust the insertion logic.
 
             # Update the sorted_interim_dates list to include the newly added date
-            sorted_interim_dates .append(date)
-            sorted_interim_dates .sort()  # Ensure the list is sorted after insertion
+            sorted_interim_dates.append(date)
+            sorted_interim_dates.sort()  # Ensure the list is sorted after insertion
     if need_to_delete_Latest:
         interim.delete_rows(interim.row_count)
+
+def fillInterimCampaignsDataColumn_NEW(interim, toexport):
+    # Batch read the dates from both sheets
+    toexport_data = toexport.get_all_values()
+    interim_data = interim.get_all_values()
+
+    # Assuming the first row is headers, extract dates starting from the second row
+    toexport_dates = [standardize_date(row[0]) for row in toexport_data[1:]]
+    interim_dates = [standardize_date(row[0]) for row in interim_data[INTERIM_SHEET_DATA:]]
+
+     # Compute the range of dates needed
+    latest_date = max(toexport_dates + interim_dates)
+    earliest_date = standardize_date('2024-01-01')
+    dt = [earliest_date + timedelta(days=i) for i in range((latest_date - earliest_date).days + 1)]
+    all_dates = dt
+        # Determine missing dates
+    missing_dates = sorted(set(all_dates) - set(interim_dates))
+    if not missing_dates:
+        print("No dates are missing.")
+        return
+    # Prepare the rows to insert for missing dates
+    rows_to_insert = [[date.strftime("%Y-%m-%d")] for date in missing_dates]
+    print('rows to insert')
+    print(rows_to_insert)
+    new_interim_data = []  # This will include both existing and new rows correctly ordered
+    for date in all_dates:
+        print(f'date={date}')
+        formatted_date = date.strftime("%Y-%m-%d")
+        if date in missing_dates:
+            new_interim_data.append([formatted_date])
+        else:
+            # Find the original row from interim_data and append it to new_interim_data
+            original_row_index = interim_dates.index(date) + INTERIM_SHEET_DATA
+            new_interim_data.append(interim_data[original_row_index])
+    # print('new_interim_data')
+    # print(new_interim_data)
+    
+    start_cell = 'A'+str(INTERIM_SHEET_DATA+1)
+    # Calculate the range to update based on new_interim_data size
+    # Note: gspread uses A1 notation for ranges, so you need to specify the range like 'A2:Z100' for example
+    # Here's a simple calculation assuming your data starts at column A and only has one column
+    end_row = len(new_interim_data)   # +1 if starting from row 2 to account for the header
+    end_col_letter =  column_index_to_string(interim.col_count) # Change if your data spans multiple columns
+    range_to_update = f'{start_cell}:{end_col_letter}{end_row}'
+    interim.batch_clear([range_to_update]) 
+    pauseMe('www')
+    print(f'range_to_update={range_to_update}')
+    # Update the sheet with new data
+    interim.update(values=new_interim_data, range_name=range_to_update, value_input_option='USER_ENTERED')
 
 def update_sheet_headers(worksheet, replacements):
     first_row_values = worksheet.row_values(1)
@@ -124,10 +174,10 @@ def step1_commonCampaignSheetCreate(spreadsheet):
     consolidated_data = []
     # Function to determine the campaign based on AdSet name
     def determine_campaign(adset_name):
-        for campaign in fb_campaigns:
+        for campaign in FB_CAMPAIGNS:
             if campaign in adset_name:
                 return campaign
-        for campaign in google_campaigns:
+        for campaign in GOOGLE_CAMPAIGNS:
             if campaign in adset_name:
                 return campaign
         return 'Other'  # Fallback category
@@ -204,7 +254,7 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']] = data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']].apply(pd.to_numeric, errors='coerce').fillna(0)
 
     # Simplify the determine_campaign function and apply it
-    campaigns = {'fb_campaigns': fb_campaigns, 'google_campaigns': google_campaigns}  # Assuming fb_campaigns and google_campaigns are defined elsewhere
+    campaigns = {'fb_campaigns': FB_CAMPAIGNS, 'google_campaigns': GOOGLE_CAMPAIGNS}  # Assuming fb_campaigns and google_campaigns are defined elsewhere
 
     def determine_campaign(adset_name):
         for source, campaign_list in campaigns.items():
@@ -310,70 +360,80 @@ def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
         time.sleep(2)
 
 def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_column=None):
+    print('Calculating campaign totals...')
     # Retrieve all data from the sheet
     all_data = interim_campaigns_sheet.get_all_values()
 
     # Calculate the starting index
-    start_index = column_letter_to_index(start_totals_column)
+    start_index = column_letter_to_index(start_totals_column)+6
     
+    # Prepare the list to hold all row updates
+    rows_to_update = []
+
     # If last_column is provided, use it; otherwise, find dynamically
     if last_column:
-        end_index = column_letter_to_index(last_column)
+        end_index = column_letter_to_index(last_column) + 1  # Adjust to include the last_column in the range
     else:
-        # Determine the end index based on the condition
-        end_index=interim_campaigns_sheet.col_count
-    
+        # Dynamically determining the last column can be tricky if not explicitly provided,
+        # as interim_campaigns_sheet.col_count might give a larger number than expected.
+        # A safer approach might involve inspecting the last row's length in all_data, but this requires assumptions about the data's consistency.
+        end_index = len(all_data[0])  # Assuming the first row (headers) spans all relevant columns
+
     # Loop through each row of data (skipping headers)
     for i, row in enumerate(all_data[2:], start=3):  # Skip header rows
-        # Build the sum formulas for the specified range
-        sum_formulas = {
-            'ad_spend': [],
-            'impressions': [],
-            'leads': [],
-            'comments': []
-        }
-        
-        # Aggregate formulas for each metric
-        for col_offset in range(start_index+6, end_index, 7):
-            sum_formulas['ad_spend'].append(f'{column_index_to_string(col_offset)}{i}')
-            sum_formulas['impressions'].append(f'{column_index_to_string(col_offset + 1)}{i}')
-            sum_formulas['leads'].append(f'{column_index_to_string(col_offset + 2)}{i}')
-            sum_formulas['comments'].append(f'{column_index_to_string(col_offset + 3)}{i}')
-        
+        # Initialize formula parts for aggregation
+        ad_spend_parts = []
+        impressions_parts = []
+        leads_parts = []
+        comments_parts = []
+
+        # Aggregate formulas for each metric within the specified columns range
+        for col_offset in range(start_index, end_index, 7):
+            ad_spend_parts.append(f'{column_index_to_string(col_offset)}{i}')
+            impressions_parts.append(f'{column_index_to_string(col_offset + 1)}{i}')
+            leads_parts.append(f'{column_index_to_string(col_offset + 2)}{i}')
+            comments_parts.append(f'{column_index_to_string(col_offset + 3)}{i}')
+
         # Construct the final formulas
-        ad_spend_formula = '+'.join(sum_formulas['ad_spend'])
-        impressions_formula = '+'.join(sum_formulas['impressions'])
-        leads_formula = '+'.join(sum_formulas['leads'])
-        comments_formula = '+'.join(sum_formulas['comments'])
+        ad_spend_formula = "+".join(ad_spend_parts)
+        impressions_formula = "+".join(impressions_parts)
+        leads_formula = "+".join(leads_parts)
+        comments_formula = "+".join(comments_parts)
 
+        cpl_formula = f"=IF({leads_formula}<>0,{ad_spend_formula}/{leads_formula},0)"
+        cp_comments_formula = f"=IF({comments_formula}<>0,{ad_spend_formula}/{comments_formula},0)"
 
-        cpl_formula = f"=IF({column_index_to_string(start_index+2)}{i}<>0,{column_index_to_string(start_index)}{i}/{column_index_to_string(start_index+2)}{i},0)"
-        cp_comments_formula = f"=IF({column_index_to_string(start_index+3)}{i}<>0,{column_index_to_string(start_index)}{i}/{column_index_to_string(start_index+3)}{i},0)"
-        
-        # Update the sheet with the final formulas for each metric
-        update_range = f'{start_totals_column}{i}:{column_index_to_string(start_index + 6)}{i}'
-        interim_campaigns_sheet.update(update_range, [[
+        # Add the row update to the batch list
+        rows_to_update.append([
             f"=SUM({ad_spend_formula})", 
             f"=SUM({impressions_formula})", 
             f"=SUM({leads_formula})", 
             f"=SUM({comments_formula})", 
-            cpl_formula,
+            cpl_formula, 
             cp_comments_formula
-        ]], value_input_option='USER_ENTERED')
-        time.sleep(1)
+        ])
+
+    # Calculate the update range
+    update_range = f"{start_totals_column}3:{column_index_to_string(start_index + 5)}{len(all_data) + 1}"
+    # Batch update the sheet with all calculated formulas at once
+    interim_campaigns_sheet.update(update_range, rows_to_update, value_input_option='USER_ENTERED')
 
 def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col=FB_TOTAL_COL, google_col=GOOGLE_TOTAL_COL):
+    print('step2 Totals_Calc filling')
     # Retrieve all data from the sheet
     all_data = interim_campaigns_sheet.get_all_values()
     
     # Calculate the column indices based on the provided column letters
-    fb_col_index = column_letter_to_index(fb_col)
+    fb_col_index = column_letter_to_index(fb_col)  # Assuming this function converts column letter to zero-based index
     google_col_index = column_letter_to_index(google_col)
     total_col_index = column_letter_to_index(total_col)
-    
-    # Loop through the rows and calculate totals
-    for i, row in enumerate(all_data[2:], start=3):  # Skip header rows and adjust for 1-based indexing
-        # Formulas for "Total Ad Spend", "Impressions", "Leads", "Comments", "Total CPL", and "cpComments"
+
+    # Prepare the range and values for batch update
+    range_name = f'{total_col}3:{column_index_to_string(total_col_index+5)}{len(all_data)+1}'
+    values = []
+
+    for i, row in enumerate(all_data[2:], start=3):  # Skip header rows
+        # Prepare formulas for each column
         total_ad_formula = f"={fb_col}{i}+{google_col}{i}"
         total_impressions_formula = f"={column_index_to_string(fb_col_index+1)}{i}+{column_index_to_string(google_col_index+1)}{i}"
         total_leads_formula = f"={column_index_to_string(fb_col_index+2)}{i}+{column_index_to_string(google_col_index+2)}{i}"
@@ -381,15 +441,18 @@ def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col
         total_cpl_formula = f"=IF({column_index_to_string(total_col_index+2)}{i}<>0,{column_index_to_string(total_col_index)}{i}/{column_index_to_string(total_col_index+2)}{i},0)"
         cp_comments_formula = f"=IF({column_index_to_string(total_col_index+3)}{i}<>0,{column_index_to_string(total_col_index)}{i}/{column_index_to_string(total_col_index+3)}{i},0)"
         
-        # Update the cells with formulas
-        interim_campaigns_sheet.update(f'{total_col}{i}:{column_index_to_string(total_col_index+5)}{i}', [[
+        # Add the prepared row to the values list
+        values.append([
             total_ad_formula,
             total_impressions_formula,
             total_leads_formula,
             total_comments_formula,
             total_cpl_formula,
             cp_comments_formula
-        ]], value_input_option='USER_ENTERED')
+        ])
+
+    # Perform a batch update for the prepared range and values
+    interim_campaigns_sheet.update(values=values, range_name=range_name,  value_input_option='USER_ENTERED')
 
 def copy_Headers(interim_campaigns_sheet, total_sheet):
     # Fetch the first two rows (headers) from 'interim_campaigns_sheet'
@@ -415,68 +478,6 @@ def format_dates_in_column_a(total_sheet):
             "pattern": date_format_pattern
         }
     })
-
-def restructure_to_weekly_OLD(interim_campaigns_sheet, total_sheet):
-    # copy_Headers(interim_campaigns_sheet, total_sheet)
-
-    # # Fetch the data from 'interim_campaigns_sheet'
-    interim_data = interim_campaigns_sheet.get_all_values()
-    
-    #  # Clear the total sheet before updating it with new data
-    total_sheet.clear()
-    # # Update the total sheet with the data from the interim sheet
-    total_sheet.update('A1', interim_data, value_input_option='USER_ENTERED')
-    format_dates_in_column_a(total_sheet)
-
-    pauseMe("Yoyo")
-    # Headers are assumed to be in the first two rows
-    headers = interim_data[1]
-
-    # Data is assumed to start from the third row
-    # Create the DataFrame
-    df = pd.DataFrame(interim_data[2:], columns=headers)
-
-    # Convert the 'Date' column to datetime if necessary
-    df[('Date')] = pd.to_datetime(df[('Date')])
-
-    # Sort the DataFrame by date
-    df.sort_values(by=[('', 'Date')], inplace=True)
-
-    # Initialize structured data with headers
-    structured_data = [headers]
-
-    # Initialize tracking for the week of the year and month
-    previous_week = None
-    week_days_count = 0
-
-    for index, row in df.iterrows():
-        current_date = row['Date']
-        week_of_year = current_date.isocalendar().week
-        month_name = current_date.strftime('%B')
-
-        # Track the day count within the same week
-        if week_of_year == previous_week or previous_week is None:
-            week_days_count += 1
-        else:
-            # Append week label when moving to a new week
-            structured_data.append([f"{previous_month} Week {previous_week}"])
-            week_days_count = 1  # Reset counter for the new week
-
-        # Append daily data
-        structured_data.append([current_date.strftime('%A, %B %d, %Y')] + row[1:].tolist())
-
-        # Track previous day's week and month for comparison in the next iteration
-        previous_week = week_of_year
-        previous_month = month_name
-
-        # Check if it's the last row to append the week and total labels correctly
-        if index == len(df) - 1:
-            structured_data.append([f"{month_name} Week {week_of_year}"])  # Week label for the last week
-            structured_data.append([f"Total {month_name}"])  # Total label for the last month
-
-    # Clear the 'TOTAL' sheet before updating it with the new structured data
-    total_sheet.clear()
-    total_sheet.update('A1', structured_data, value_input_option='USER_ENTERED')
 
 def insert_week_and_month_totals(total_sheet):
     # Fetch all the dates from column 'A', starting from row 3 to skip headers
@@ -607,14 +608,27 @@ def identify_non_numerical_cell_in_column_B(end_row,  mysheet=None):
     return start_row
 
 def restructure_to_weekly(interim_campaigns_sheet,spreadsheet, sheet_name):
+    print(f'restructure_to_weekly')
     try:
         # Try to open the worksheet by title
-        new_worksheet=spreadsheet.worksheet(sheet_name)
+        to_del=spreadsheet.worksheet(sheet_name)
+        spreadsheet.del_worksheet(to_del)
     except gspread.WorksheetNotFound:
-        # If the worksheet does not exist, create it
-        new_worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
-        # Move the newly created sheet to the first position
-        spreadsheet.reorder_worksheets([new_worksheet.id] + [ws.id for ws in spreadsheet.worksheets() if ws.title != sheet_name])
+        pass
+    
+    new_worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
+    print(f"New worksheet created: {type(new_worksheet)} with ID {new_worksheet.id}")  # Debug print
+
+    # Debugging: Print existing worksheet IDs
+    existing_ids = [ws.id for ws in spreadsheet.worksheets()]
+    print(f"Existing worksheet IDs before reordering: {existing_ids}")
+
+    # Move the newly created sheet to the first position
+    try:
+        spreadsheet.reorder_worksheets([new_worksheet.id] + [ws.id for ws in spreadsheet.worksheets() if ws.id != new_worksheet.id])
+    except Exception as e:
+        print(f"Error during reordering: {e}")
+
     # Fetch the data from 'interim_campaigns_sheet'
     interim_data = interim_campaigns_sheet.get_all_values()
     # print(f'SHEET ID={new_worksheet.id}')
@@ -710,7 +724,7 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
     data_to_insert = [source_data[0][:COLUMNS_TO_COPY],source_data[1][:COLUMNS_TO_COPY]]  # Replace with actual headers if needed
 
    # Add the aggregated week data to the data_to_insert list
-    for week_number, aggregated_data in sorted(week_data_aggregated.items()):
+    for week_number, aggregated_data in sorted(week_data_aggregated.items(), key=lambda x: int(x[0])):
         data_to_insert.append(aggregated_data)
     # Add five empty rows after the last row of data
     for _ in range(250):
