@@ -46,6 +46,8 @@ def total_summary_section_format(date_row, workbook_id=None, service=None, start
 
      # Calculate the starting index from the column letter
     start_col_index = column_letter_to_index(start_col)-2 if start_col is not None else 0
+    tp="CURRENCY" if start_col is not None else "PERCENT"
+    tp_val='"€"#,##0.00' if start_col is not None else "0.00%"
     # print(f'{start_col}+1=Index {start_col_index}')
 
     # Define column formats in a more maintainable structure
@@ -54,8 +56,8 @@ def total_summary_section_format(date_row, workbook_id=None, service=None, start
         (start_col_index+2, "NUMBER", "#0"),              # Impressions
         (start_col_index+3, "NUMBER", "#0"),              # Total Leads
         (start_col_index+4, "NUMBER", "#0"),              # Total Comments
-        (start_col_index+5, "CURRENCY", '"€"#,##0.00'),  # Total CPL
-        (start_col_index+6, "CURRENCY", '"€"#,##0.00'),  # Total CPComments
+        (start_col_index+5, tp, tp_val),  # Total CPL  - OR - % of Facebook in common total
+        (start_col_index+6, tp, tp_val),  # Total CPComments - OR - % of GOOGEL in common total
     ]
     requests = [
         create_format_request(rangeDef(date_row, col_idx), format_type, pattern)
@@ -240,7 +242,7 @@ def add_up_down_borders_to_rows(worksheet, start_row_index, end_row_index, borde
     }
     service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
 
-def add_weekly_summary_chart(worksheet, chart_title="SPEND x Leads x CPL - Weekly"):
+def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CPL - Weekly"):
     last_data_row_index = worksheet.row_count 
     print(f'last_data_row_index={last_data_row_index}')
 
@@ -249,7 +251,7 @@ def add_weekly_summary_chart(worksheet, chart_title="SPEND x Leads x CPL - Weekl
 
     # Iterate in reverse to find the last occurrence
     for index, value in reversed(list(enumerate(column_a_values))):
-        if value.startswith('Week'):
+        if value.startswith(startsLineWith):
             last_data_row_index = index + 1  # +1 because enumerate starts at 0
             break
 
@@ -419,6 +421,43 @@ def add_chart_to_sheet(worksheet, chart_title, data_column_letter,
     response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
     return response  # Return the API response for further processing if necessary
 
+def color_rows_in_export(sheet,row_format_updates):
+    requests = []
+    for row_index, color in row_format_updates:
+    # Convert color to Google Sheets API format if necessary
+        gs_color = {"red": color["red"], "green": color["green"], "blue": color["blue"]}
+        requests.append({
+        "updateCells": {
+            "range": {
+                "sheetId": sheet.id,  # You need to know the sheet ID
+                "startRowIndex": row_index-1,
+                "endRowIndex": row_index,
+                "startColumnIndex": 0,
+                "endColumnIndex": 1,  # Adjust if you want to format more than one column
+            },
+            "rows": [
+                {
+                    "values": [
+                        {
+                            "userEnteredFormat": {
+                                "backgroundColor": gs_color,
+                            }
+                        }
+                    ]
+                }
+            ],
+            "fields": "userEnteredFormat.backgroundColor",
+        }
+    })
+
+    body = {
+    "requests": requests
+    }
+
+    response = service.spreadsheets().batchUpdate(
+    spreadsheetId=sheet.spreadsheet_id,
+    body=body
+    ).execute()
 
 
 

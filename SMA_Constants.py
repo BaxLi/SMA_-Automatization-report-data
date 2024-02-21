@@ -32,8 +32,9 @@ GOOGLE_CAMPAIGNS = [
 ]
 
 interim_campaigns_sheet_name='InterimCampaigns'
+TOTAL_CAMPAIGNS_SHEET_NAME='Total Summary – Technical reporting-Summarize'
 INTERIM_SHEET_DATA=2
 commonExportedCampaignsSheet='campaign_exp_sheet'
 TOTAL_TOTAL_COL='B'
 FB_TOTAL_COL='H'
-GOOGLE_TOTAL_COL='BY'
+GOOGLE_TOTAL_COL='BR'

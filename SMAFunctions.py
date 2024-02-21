@@ -6,8 +6,8 @@ from gspread.utils import column_letter_to_index
 import gspread
 from gspread.exceptions import WorksheetNotFound
 import pandas as pd
-from SMAGoogleAPICalls import (add_chart_to_sheet, add_weekly_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,
-                                add_borders_to_cells_only_allRows, add_up_down_borders_to_rows)
+from SMAGoogleAPICalls import (add_chart_to_sheet, add_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,
+                                add_borders_to_cells_only_allRows, add_up_down_borders_to_rows, color_rows_in_export)
 from SMA_Constants import (FB_CAMPAIGNS, GOOGLE_CAMPAIGNS, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL, INTERIM_SHEET_DATA)
 
 # Helper function to standardize date format, e.g., '2024-01-31'
@@ -28,6 +28,7 @@ def find_insert_position(sorted_dates, new_date, delta=INTERIM_SHEET_DATA):
     return len(sorted_dates) + 1+delta # If new_date is latest, insert at the end
 
 def fillInterimCampaignsDataColumn(interim, toexport):
+    print('EXECUTE - fillInterimCampaignsDataColumn')
     toexport_dates =  toexport.col_values(1)[1:]
     interim_dates = interim.col_values(1)[INTERIM_SHEET_DATA:] 
 
@@ -282,7 +283,7 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     # pauseMe("Step-1 finish")
 
 # Iterate over each row in 'campaign_exp_data'
-def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
+def step2_iterateExport_OLD(campaign_exp_sheet, interim_campaigns_sheet):
     # Now, retrieve the data from the sheet and store it in the 'campaign_exp_data' DataFrame
     campaign_exp_data = pd.DataFrame(campaign_exp_sheet.get_all_records())
     # Define colors for success and failure
@@ -293,7 +294,7 @@ def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
     header_row = interim_campaigns_sheet.row_values(1)  # Campaign names
 
     # Assuming the date column is the first one in 'InterimFB'
-    dates_column = interim_campaigns_sheet.col_values(1)[2:]  # Start from row 3 to skip header rows
+    dates_column = interim_campaigns_sheet.col_values(1)[INTERIM_SHEET_DATA:]  # Start from row 3 to skip header rows
 
     for index, row in campaign_exp_data.iterrows():
         # Find the row number for the current date in 'InterimFB'
@@ -357,7 +358,70 @@ def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
         interim_campaigns_sheet.update(values=[update_values], range_name=f'{start_cell}:{end_cell}', value_input_option='USER_ENTERED')
         # Mark as successfull export
         campaign_exp_sheet.format(f"{index + 2}:{index + 2}", {"backgroundColor": success_color})
-        time.sleep(2)
+        time.sleep(1)
+
+def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
+    print('EXECUTE - step2_iterateExport')
+    campaign_exp_data = pd.DataFrame(campaign_exp_sheet.get_all_records())
+    success_color = {"red": 0.85, "green": 0.93, "blue": 0.83}  # Light green
+    failure_color = {"red": 0.96, "green": 0.80, "blue": 0.80}  # Light red
+
+    header_row = interim_campaigns_sheet.row_values(1)
+    dates_column = interim_campaigns_sheet.col_values(1)[2:]
+
+    # Prepare a list to hold all updates for batch processing
+    batch_updates = []
+    row_format_updates = []
+
+    for index, row in campaign_exp_data.iterrows():
+        date = row['Date']
+        print(f'{date}')
+        if date in dates_column:
+            date_row_number = dates_column.index(date) + 3
+        else:
+            date_row_number = len(dates_column) + 3
+            interim_campaigns_sheet.append_row([date])
+            dates_column.append(date)
+
+        determined_campaign = row['Determined Campaign']
+        if determined_campaign == "Other" or not determined_campaign:
+            row_format_updates.append((index + 2, failure_color))
+            continue
+
+        start_column_index = header_row.index(determined_campaign) + 1
+        update_range_start = gspread.utils.rowcol_to_a1(date_row_number, start_column_index)
+        update_range_end = gspread.utils.rowcol_to_a1(date_row_number, start_column_index + 6)
+
+        update_values = [
+            row['Ad Spend'],
+            row['Impressions'] if row['Impressions'] else 0,
+            row['Total Leads'] if row['Total Leads'] else 0,
+            row['Post comments'] if row['Post comments'] else 0,
+            f"=IFERROR({update_range_start}/{gspread.utils.rowcol_to_a1(date_row_number, start_column_index + 2)},0)",  # total_cpl_formula
+            f"=IFERROR({update_range_start}/{gspread.utils.rowcol_to_a1(date_row_number, start_column_index + 3)},0)",  # cp_comments_formula
+            f"=IFERROR({update_range_start}/B{date_row_number},0)"  # percent_of_spend_formula
+        ]
+
+        # Collect update data for batch processing
+        batch_updates.append({
+            "range": f"{update_range_start}:{update_range_end}",
+            "values": [update_values]
+        })
+        row_format_updates.append((index + 2, success_color))
+        # time.sleep(1)  # Consider the necessity of this sleep in the context of batch updates
+    print('Batch updates')
+    print(f'{batch_updates}')
+    # Perform batch update for all collected data
+    interim_campaigns_sheet.batch_update(batch_updates, value_input_option='USER_ENTERED')
+    time.sleep(2)
+    # Apply formatting updates separately if necessary
+    # for row_index, color in row_format_updates:
+    #     campaign_exp_sheet.format(f"{row_index}:{row_index}", {"backgroundColor": color})
+    #     time.sleep(1)
+    
+    # color_rows_in_export(interim_campaigns_sheet,row_format_updates)
+
+
 
 def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_column=None):
     print('Calculating campaign totals...')
@@ -372,7 +436,7 @@ def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_colu
 
     # If last_column is provided, use it; otherwise, find dynamically
     if last_column:
-        end_index = column_letter_to_index(last_column) + 1  # Adjust to include the last_column in the range
+        end_index = column_letter_to_index(last_column)   # Adjust to include the last_column in the range
     else:
         # Dynamically determining the last column can be tricky if not explicitly provided,
         # as interim_campaigns_sheet.col_count might give a larger number than expected.
@@ -400,8 +464,8 @@ def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_colu
         leads_formula = "+".join(leads_parts)
         comments_formula = "+".join(comments_parts)
 
-        cpl_formula = f"=IF({leads_formula}<>0,{ad_spend_formula}/{leads_formula},0)"
-        cp_comments_formula = f"=IF({comments_formula}<>0,{ad_spend_formula}/{comments_formula},0)"
+        cpl_formula = f"=IF({leads_formula}<>0,({ad_spend_formula})/({leads_formula}),0)"
+        cp_comments_formula = f"=IF({comments_formula}<>0,({ad_spend_formula})/({comments_formula}),0)"
 
         # Add the row update to the batch list
         rows_to_update.append([
@@ -438,8 +502,8 @@ def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col
         total_impressions_formula = f"={column_index_to_string(fb_col_index+1)}{i}+{column_index_to_string(google_col_index+1)}{i}"
         total_leads_formula = f"={column_index_to_string(fb_col_index+2)}{i}+{column_index_to_string(google_col_index+2)}{i}"
         total_comments_formula = f"={column_index_to_string(fb_col_index+3)}{i}+{column_index_to_string(google_col_index+3)}{i}"
-        total_cpl_formula = f"=IF({column_index_to_string(total_col_index+2)}{i}<>0,{column_index_to_string(total_col_index)}{i}/{column_index_to_string(total_col_index+2)}{i},0)"
-        cp_comments_formula = f"=IF({column_index_to_string(total_col_index+3)}{i}<>0,{column_index_to_string(total_col_index)}{i}/{column_index_to_string(total_col_index+3)}{i},0)"
+        total_cpl_formula = f"=IF(B{i}<>0,{FB_TOTAL_COL}{i}/B{i},0)"
+        cp_comments_formula = f"=IF(B{i}<>0,{GOOGLE_TOTAL_COL}{i}/B{i},0)"
         
         # Add the prepared row to the values list
         values.append([
@@ -552,7 +616,11 @@ def colB_Month_Sum(row_index, mysheet):
     # Generate the formulas for the all columns starts from B
     for col_index in range(2, mysheet.col_count ):  # Assuming total_sheet.col_count gives the number of columns
         col_letter = column_index_to_string(col_index) # Convert column index to letter
-        sum_formula = f"=SUM({col_letter}{idx}:{col_letter}{row_index-1})/2"
+        if col_letter=='F' or col_letter=="G":
+            myCol= FB_TOTAL_COL if col_letter=='F' else GOOGLE_TOTAL_COL
+            sum_formula=f"=IF(B{row_index}<>0,B{row_index}/{myCol}{row_index},0)"
+        else:
+            sum_formula = f"=SUM({col_letter}{idx}:{col_letter}{row_index-1})/2"
         sum_formulas.append(sum_formula)
     range_to_update = f"B{row_index}:{column_index_to_string(mysheet.col_count - 1)}{row_index}"
     mysheet.update(values=[sum_formulas],range_name=range_to_update, value_input_option='USER_ENTERED' )
@@ -565,11 +633,15 @@ def colB_Week_Sum(adjusted_row_index, total_sheet):
     end_row = adjusted_row_index - 1
     start_row = identify_non_numerical_cell_in_column_B(end_row, total_sheet)
     sum_formulas = []
-        
+    print(f' LINE 636 total_sheet.col_count ={total_sheet.col_count}') 
     # Generate the formulas for the remaining columns
     for col_index in range(2, total_sheet.col_count ):  # Assuming total_sheet.col_count gives the number of columns
         col_letter = column_index_to_string(col_index) #string.ascii_uppercase[col_index - 1]  # Convert column index to letter
-        sum_formula = f"=SUM({col_letter}{start_row+1}:{col_letter}{end_row})"
+        if col_letter=="F" or col_letter=="G":
+            myCol= FB_TOTAL_COL if col_letter=='F' else GOOGLE_TOTAL_COL
+            sum_formula=f"=IF(B{end_row+1}<>0,{myCol}{end_row+1}/B{end_row+1},0)"
+        else:
+            sum_formula = f"=SUM({col_letter}{start_row+1}:{col_letter}{end_row})"
         sum_formulas.append(sum_formula)
 
     # Update the entire row with sum formulas in a single API call
@@ -635,12 +707,13 @@ def restructure_to_weekly(interim_campaigns_sheet,spreadsheet, sheet_name):
 
     # Clear the total sheet before updating it with new data
     clear_sheet_formatting_and_content(new_worksheet)
-    time.sleep(2)
+    time.sleep(1)
     copy_Headers(interim_campaigns_sheet, new_worksheet)
-    time.sleep(2)
+    time.sleep(1)
     # # Update the total sheet with the data from the interim sheet
     new_worksheet.update(range_name='A1', values=interim_data, value_input_option='USER_ENTERED')
-    time.sleep(2)
+    time.sleep(1)
+    new_worksheet = spreadsheet.worksheet(sheet_name)
     format_dates_in_column_a(new_worksheet)
     time.sleep(2)
     add_borders_to_cells_only_allRows(new_worksheet, 1,new_worksheet.col_count)
@@ -686,7 +759,7 @@ def merge_non_empty_columns_in_first_row(mysheet):
     
 
 def create_weeks_summary_sheet(spreadsheet, source_sheet):
-    COLUMNS_TO_COPY=7
+    COLUMNS_TO_COPY=5
 #    Get all the data from the source sheet
     source_data = source_sheet.get_all_values()
     # print(source_data)
@@ -731,15 +804,15 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
         data_to_insert.append(['' for _ in range(COLUMNS_TO_COPY)])
     weeks_summary_sheet.update( values=data_to_insert, range_name=f'A1:T{str(len(data_to_insert))}', value_input_option='USER_ENTERED')
 
-    add_weekly_summary_chart(weeks_summary_sheet)
+    add_summary_chart(weeks_summary_sheet,'Week')
     add_chart_to_sheet(weeks_summary_sheet,'AD SPend', 'B', 0,10)
     add_chart_to_sheet(weeks_summary_sheet,'Impressions', 'C', 18,10)
-    add_chart_to_sheet(weeks_summary_sheet,'Leads', 'D', 36,10)
+    # add_chart_to_sheet(weeks_summary_sheet,'Leads', 'D', 36,10)
 
-    normalize_data(spreadsheet, weeks_summary_sheet)
+    normalize_data(spreadsheet, weeks_summary_sheet,'week')
     
 # Function to normalize values
-def normalize_data(spreadsheet, sheet):
+def normalize_data(spreadsheet, sheet, period='week'):
     # Get all the data from the sheet
     data = sheet.get_all_values()
     # Convert to a DataFrame
@@ -761,8 +834,8 @@ def normalize_data(spreadsheet, sheet):
         'Impressions': 1,
         'Total Leads': 2,
         'Total Comments': 3,
-        'Total CPL': 4,
-        'Total cpComments': 5,
+        # 'Total CPL': 4,
+        # 'Total cpComments': 5,
         # Add more if needed, like 'Total cpComments': X, where X is the increment for that column
     }
 
@@ -773,20 +846,78 @@ def normalize_data(spreadsheet, sheet):
 
   # Check if a sheet named 'Normalized Data' exists
     try:
-        normalized_sheet = spreadsheet.worksheet('Normalized Data')
+        normalized_sheet = spreadsheet.worksheet(f'Normalized Data '+period)
         spreadsheet.del_worksheet(normalized_sheet)
     except gspread.WorksheetNotFound:
         # If it does not exist, create a new sheet
         pass
-    normalized_sheet = spreadsheet.add_worksheet(title="Normalized Data", rows=df_normalized.shape[0]+10, cols=len(df_normalized.columns)+10)
+    normalized_sheet = spreadsheet.add_worksheet(title=f'Normalized Data '+period, rows=df_normalized.shape[0]+10, cols=len(df_normalized.columns)+10)
     # Prepare the data for update, including the header
     normalized_data = [header.values.tolist()] + [header2.values.tolist()] + df_normalized.values.tolist()
-
+    print('Normalized Data')
+    print(f'{normalized_data}')
  # Update the sheet with normalized data
     normalized_sheet.update(values=normalized_data, value_input_option='USER_ENTERED') #started range = A1 !
-    add_weekly_summary_chart(normalized_sheet)
+    timePeriod= "Week" if period == 'week' else "TOTAL"
+    add_summary_chart(normalized_sheet,timePeriod)
 
     return df_normalized
+
+
+def create_months_summary_sheet(spreadsheet, source_sheet):
+    COLUMNS_TO_COPY = 5  # Adjust based on your data structure
+
+    # Get all the data from the source sheet
+    source_data = source_sheet.get_all_values()
+
+    month_data_aggregated = {}
+    # Filter out the rows where column A starts with 'TOTAL' and aggregate the data
+    for row in source_data:
+        if row[0].startswith('TOTAL'):
+            month_name = row[0].split(' ')[1].strip()  # Extract the month name
+            if month_name not in month_data_aggregated:
+                month_data_aggregated[month_name] = [
+                    row[0]] + [float(value.replace('€', '').replace(',', '').strip()) if value.replace('€', '').replace(',', '').strip().replace('.', '', 1).isdigit() else value
+                    for i, value in enumerate(row[1:COLUMNS_TO_COPY], 1)]
+            else:
+                # Sum up subsequent occurrences
+                for i in range(1, COLUMNS_TO_COPY):
+                    if row[i].strip():
+                        if row[i].replace('€', '').replace(',', '').strip().replace('.', '', 1).isdigit():
+                            month_data_aggregated[month_name][i] += float(row[i].replace('€', '').replace(',', '').strip())
+                        else:
+                            month_data_aggregated[month_name][i] = row[i]
+
+    # Create 'MonthsSummary' sheet or clear it if it already exists
+    try:
+        months_summary_sheet = spreadsheet.worksheet('MonthsSummary')
+        spreadsheet.del_worksheet(months_summary_sheet)
+    except gspread.WorksheetNotFound:
+        pass
+
+    months_summary_sheet = spreadsheet.add_worksheet(title='MonthsSummary', rows=str(len(month_data_aggregated) + 5), cols="20")
+
+    # Define the correct order for the months
+    months_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    
+    # Sort the month names based on the months_order list
+    sorted_months = sorted(month_data_aggregated.keys(), key=lambda x: months_order.index(x))
+
+    # Prepare the data to be inserted into 'MonthsSummary'
+    data_to_insert = [source_data[0][:COLUMNS_TO_COPY], source_data[1][:COLUMNS_TO_COPY]]  # Adjust headers as needed
+
+    # Add the aggregated month data to the data_to_insert list
+    for month_name in sorted_months:
+        data_to_insert.append(month_data_aggregated[month_name])
+
+    # Add empty rows for formatting, if necessary
+    for _ in range(5):  # Adjust based on your needs
+        data_to_insert.append(['' for _ in range(COLUMNS_TO_COPY)])
+
+    # Update the sheet with aggregated data
+    months_summary_sheet.update(values=data_to_insert, range_name=f'A1:T{len(data_to_insert)}', value_input_option='USER_ENTERED')
+    normalize_data(spreadsheet, months_summary_sheet,'month')
+
 
 
 
