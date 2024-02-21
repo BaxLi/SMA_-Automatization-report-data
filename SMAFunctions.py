@@ -227,6 +227,7 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     try:
         GOOGLE_data_exp_sheet = spreadsheet.worksheet('Google Export Data')
         data_google = pd.DataFrame(GOOGLE_data_exp_sheet.get_all_records())
+        data_google['Campaign name'] = data_google['Campaign name'].replace('SMA | Search | BAU | Brand Protect | MCPC', 'SMA | Search | BAU | Brand', regex=True)
     except WorksheetNotFound:
         print("Google Export Data sheet not found.")
         pauseMe('Google export to read')
@@ -501,9 +502,9 @@ def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col
         total_ad_formula = f"={fb_col}{i}+{google_col}{i}"
         total_impressions_formula = f"={column_index_to_string(fb_col_index+1)}{i}+{column_index_to_string(google_col_index+1)}{i}"
         total_leads_formula = f"={column_index_to_string(fb_col_index+2)}{i}+{column_index_to_string(google_col_index+2)}{i}"
-        total_comments_formula = f"={column_index_to_string(fb_col_index+3)}{i}+{column_index_to_string(google_col_index+3)}{i}"
-        total_cpl_formula = f"=IF(B{i}<>0,{FB_TOTAL_COL}{i}/B{i},0)"
-        cp_comments_formula = f"=IF(B{i}<>0,{GOOGLE_TOTAL_COL}{i}/B{i},0)"
+        total_comments_formula = f"=IF(D{i}<>0,{TOTAL_TOTAL_COL}{i}/D{i},0)"
+        totalFBPercentOfSpend =  f"=IF(B{i}<>0,{FB_TOTAL_COL}{i}/B{i},0)"
+        totalGooglePercentOfSpend = f"=IF(B{i}<>0,{GOOGLE_TOTAL_COL}{i}/B{i},0)"
         
         # Add the prepared row to the values list
         values.append([
@@ -511,8 +512,8 @@ def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col
             total_impressions_formula,
             total_leads_formula,
             total_comments_formula,
-            total_cpl_formula,
-            cp_comments_formula
+            totalFBPercentOfSpend,
+            totalGooglePercentOfSpend
         ])
 
     # Perform a batch update for the prepared range and values
@@ -618,7 +619,7 @@ def colB_Month_Sum(row_index, mysheet):
         col_letter = column_index_to_string(col_index) # Convert column index to letter
         if col_letter=='F' or col_letter=="G":
             myCol= FB_TOTAL_COL if col_letter=='F' else GOOGLE_TOTAL_COL
-            sum_formula=f"=IF(B{row_index}<>0,B{row_index}/{myCol}{row_index},0)"
+            sum_formula=f"=IF(B{row_index}<>0,{myCol}{row_index}/B{row_index},0)"
         else:
             sum_formula = f"=SUM({col_letter}{idx}:{col_letter}{row_index-1})/2"
         sum_formulas.append(sum_formula)
@@ -758,7 +759,7 @@ def merge_non_empty_columns_in_first_row(mysheet):
         # pauseMe(22)
     
 
-def create_weeks_summary_sheet(spreadsheet, source_sheet):
+def create_weeks_summary_sheet_OLD(spreadsheet, source_sheet):
     COLUMNS_TO_COPY=5
 #    Get all the data from the source sheet
     source_data = source_sheet.get_all_values()
@@ -811,31 +812,103 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
 
     normalize_data(spreadsheet, weeks_summary_sheet,'week')
     
+
+def create_weeks_summary_sheet(spreadsheet, source_sheet):
+    print('EXECUTE  - create_weeks_summary_sheet')
+    NUMBER_COLUMNS_TO_INSERT_IN_CHART=4
+    # Get all the data from the source sheet
+    source_data = source_sheet.get_all_values()
+
+    # Identify columns to copy
+    b_column_index = 1  # Column 'B' is at index 1
+    bau_brand_column_index = next((i for i, value in enumerate(source_data[0]) if 'BAU | Brand' in value), None)
+    fb_total_col_index = column_letter_to_index(FB_TOTAL_COL)-1   # Convert to index
+    google_total_col_index = column_letter_to_index(GOOGLE_TOTAL_COL)-1
+    print(f'bau_brand_column_index={bau_brand_column_index}')
+    # Ensure BAU | Brand column was found
+    if bau_brand_column_index is None:
+        print("BAU | Brand column not found.")
+        return
+
+    week_data_aggregated = {}
+    # Filter out the rows where column A starts with 'Week' and aggregate the data
+    for row in source_data:
+        if row[0].startswith('Week'):
+            week_number = row[0].split('-')[1].strip()  # Extract the week number
+            # Extract and convert values for each required column
+            values = [
+                float(row[b_column_index].replace('€', '').replace(',', '').strip() if row[b_column_index] else 0),
+                float(row[fb_total_col_index].replace('€', '').replace(',', '').strip() if row[fb_total_col_index] else 0),
+                float(row[google_total_col_index].replace('€', '').replace(',', '').strip() if row[google_total_col_index] else 0),
+                float(row[bau_brand_column_index+1].replace('€', '').replace(',', '').strip() if row[bau_brand_column_index] else 0)
+            ]
+            if week_number not in week_data_aggregated:
+                week_data_aggregated[week_number] = values
+            else:
+                # Sum up the values
+                week_data_aggregated[week_number] = [sum(x) for x in zip(week_data_aggregated[week_number], values)]
+
+    
+    try:
+        weeks_summary_sheet = spreadsheet.worksheet('WeeksSummary')
+        spreadsheet.del_worksheet(weeks_summary_sheet)
+    except gspread.WorksheetNotFound:
+        pass
+
+    weeks_summary_sheet = spreadsheet.add_worksheet(title='WeeksSummary', rows=str(len(week_data_aggregated) + 5), cols="20")
+
+     # Prepare and insert the data into 'WeeksSummary'
+
+    headers = ["Weeks", "Totals", "FB_Total", "Google_Total"]
+    if bau_brand_column_index is not None:
+        headers.append(source_data[0][bau_brand_column_index]+'_Impressions')
+    data_to_insert = [headers]
+
+    for week_number, aggregated_data in sorted(week_data_aggregated.items(), key=lambda x: int(x[0])):
+        data_to_insert.append([f"Week-{week_number}"] + aggregated_data)
+
+    print('data_to_insert')
+    print(data_to_insert)
+
+    for _ in range(5):  # Add five empty rows after the last row of data
+        data_to_insert.append(['' for _ in range(len(data_to_insert[0]))])
+
+    end_column_letter = chr(64 + len(data_to_insert[0]))  # Calculate the letter for the last column
+    end_row_number = len(data_to_insert)  # Calculate the last row number
+    rng = f'A1:{end_column_letter}{end_row_number}'  # Update the range string accordingly
+    print(f'Calculated range: {rng}')
+    weeks_summary_sheet.update(values=data_to_insert, range_name=rng, value_input_option='USER_ENTERED')
+    normalize_data(spreadsheet, weeks_summary_sheet,'week')
+
 # Function to normalize values
 def normalize_data(spreadsheet, sheet, period='week'):
+    print('EXECUTE - normalize_data')
     # Get all the data from the sheet
     data = sheet.get_all_values()
     # Convert to a DataFrame
     df = pd.DataFrame(data)
     # # Assuming the first row is the header
-    header = df.iloc[0]  # This is the header row
-    header2 = df.iloc[1]  # This is the header row
-    df.columns = df.iloc[1]
-    df = df[2:]
-    # Convert numeric columns to float
-    numeric_columns = df.columns.drop('Date')
+    df.columns = df.iloc[0] # This is the header row 
+    df = df[1:] # Drop the first row since it's now the header
+
+    # Convert numeric columns to float, ensure 'Totals' is treated as numeric
+    # Ensure 'Totals' column is correctly targeted for numeric conversion
+    numeric_columns = [col for col in df.columns if col != 'Date' and col != 'Weeks' and col != 'Month' ]  # Exclude 'Date' if it's not to be normalized
     df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
-    # Normalize the numeric columns (except 'Date')
+
+
+    # Normalize the numeric columns
     df_normalized = df.copy()
     for column in numeric_columns:
-        df_normalized[column] = (df[column] - df[column].min()) / (df[column].max() - df[column].min())
+        # Skip normalization for 'Date' if it's included in numeric_columns by mistake
+        if column != 'Date' and column != 'Weeks':
+            df_normalized[column] = (df[column] - df[column].min()) / (df[column].max() - df[column].min())
+
     
     increments = {
-        'Impressions': 1,
-        'Total Leads': 2,
-        'Total Comments': 3,
-        # 'Total CPL': 4,
-        # 'Total cpComments': 5,
+        'FB_Total': 1,
+        'Google_Total': 2,
+        'BAU | Brand_Impressions': 3,
         # Add more if needed, like 'Total cpComments': X, where X is the increment for that column
     }
 
@@ -844,6 +917,7 @@ def normalize_data(spreadsheet, sheet, period='week'):
         if column in df_normalized.columns:
             df_normalized[column] = df_normalized[column] + increment
 
+    # df_normalized.fillna(value=None, inplace=True)
   # Check if a sheet named 'Normalized Data' exists
     try:
         normalized_sheet = spreadsheet.worksheet(f'Normalized Data '+period)
@@ -853,72 +927,87 @@ def normalize_data(spreadsheet, sheet, period='week'):
         pass
     normalized_sheet = spreadsheet.add_worksheet(title=f'Normalized Data '+period, rows=df_normalized.shape[0]+10, cols=len(df_normalized.columns)+10)
     # Prepare the data for update, including the header
-    normalized_data = [header.values.tolist()] + [header2.values.tolist()] + df_normalized.values.tolist()
+    normalized_data = [df.columns.tolist()] +  df_normalized.values.tolist()
     print('Normalized Data')
     print(f'{normalized_data}')
+    
+    for _ in range(37):  # Add five empty rows after the last row of data
+        normalized_data.append(['' for _ in range(len(normalized_data[0]))])
+
  # Update the sheet with normalized data
-    normalized_sheet.update(values=normalized_data, value_input_option='USER_ENTERED') #started range = A1 !
-    timePeriod= "Week" if period == 'week' else "TOTAL"
-    add_summary_chart(normalized_sheet,timePeriod)
+    normalized_sheet.update(values=normalized_data, range_name='A1', value_input_option='USER_ENTERED') #started range = A1 !
+    if period=='week':
+        add_summary_chart(normalized_sheet, "Week","TOTAL", ['Totals', 'BAU | Brand_Impressions'], "G1")
+        add_summary_chart(normalized_sheet, "Week","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
+    if period=='month':
+        add_summary_chart(normalized_sheet, "month","TOTAL", ['Totals', 'BAU | Brand_Impressions'], "G1")
+        add_summary_chart(normalized_sheet, "month","Per BRAND ", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "F11")
+        # add_summary_chart(normalized_sheet, "Totals","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
 
     return df_normalized
 
-
 def create_months_summary_sheet(spreadsheet, source_sheet):
-    COLUMNS_TO_COPY = 5  # Adjust based on your data structure
+    print('EXECUTE - create_month_summary_sheet')
 
     # Get all the data from the source sheet
     source_data = source_sheet.get_all_values()
+
+    # Identify columns to copy
+    b_column_index = 1  # Assuming 'B' is at index 1
+    bau_brand_column_index = next((i for i, value in enumerate(source_data[0]) if 'BAU | Brand' in value), None)
+    fb_total_col_index = column_letter_to_index(FB_TOTAL_COL) - 1   # Convert to index
+    google_total_col_index = column_letter_to_index(GOOGLE_TOTAL_COL) - 1
+
+    # Ensure BAU | Brand column was found
+    if bau_brand_column_index is None:
+        print("BAU | Brand column not found.")
+        return
 
     month_data_aggregated = {}
     # Filter out the rows where column A starts with 'TOTAL' and aggregate the data
     for row in source_data:
         if row[0].startswith('TOTAL'):
             month_name = row[0].split(' ')[1].strip()  # Extract the month name
+            # Extract and convert values for each required column
+            values = [
+                float(row[b_column_index].replace('€', '').replace(',', '').strip() if row[b_column_index] else 0),
+                float(row[fb_total_col_index].replace('€', '').replace(',', '').strip() if row[fb_total_col_index] else 0),
+                float(row[google_total_col_index].replace('€', '').replace(',', '').strip() if row[google_total_col_index] else 0),
+                float(row[bau_brand_column_index+1].replace('€', '').replace(',', '').strip() if row[bau_brand_column_index+1] else 0)
+            ]
             if month_name not in month_data_aggregated:
-                month_data_aggregated[month_name] = [
-                    row[0]] + [float(value.replace('€', '').replace(',', '').strip()) if value.replace('€', '').replace(',', '').strip().replace('.', '', 1).isdigit() else value
-                    for i, value in enumerate(row[1:COLUMNS_TO_COPY], 1)]
+                month_data_aggregated[month_name] = values
             else:
-                # Sum up subsequent occurrences
-                for i in range(1, COLUMNS_TO_COPY):
-                    if row[i].strip():
-                        if row[i].replace('€', '').replace(',', '').strip().replace('.', '', 1).isdigit():
-                            month_data_aggregated[month_name][i] += float(row[i].replace('€', '').replace(',', '').strip())
-                        else:
-                            month_data_aggregated[month_name][i] = row[i]
+                # Sum up the values for existing months
+                month_data_aggregated[month_name] = [sum(x) for x in zip(month_data_aggregated[month_name], values)]
 
-    # Create 'MonthsSummary' sheet or clear it if it already exists
     try:
-        months_summary_sheet = spreadsheet.worksheet('MonthsSummary')
-        spreadsheet.del_worksheet(months_summary_sheet)
-    except gspread.WorksheetNotFound:
+        month_summary_sheet = spreadsheet.worksheet('MonthSummary')
+        spreadsheet.del_worksheet(month_summary_sheet)
+    except WorksheetNotFound:
         pass
 
-    months_summary_sheet = spreadsheet.add_worksheet(title='MonthsSummary', rows=str(len(month_data_aggregated) + 5), cols="20")
+    month_summary_sheet = spreadsheet.add_worksheet(title='MonthSummary', rows=str(len(month_data_aggregated) + 5), cols="20")
 
-    # Define the correct order for the months
-    months_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-    
-    # Sort the month names based on the months_order list
-    sorted_months = sorted(month_data_aggregated.keys(), key=lambda x: months_order.index(x))
+    # Prepare and insert the data into 'MonthSummary'
+    headers = ["Month", "Totals", "FB_Total", "Google_Total", source_data[0][bau_brand_column_index]+'_Impressions']
+    data_to_insert = [headers]
 
-    # Prepare the data to be inserted into 'MonthsSummary'
-    data_to_insert = [source_data[0][:COLUMNS_TO_COPY], source_data[1][:COLUMNS_TO_COPY]]  # Adjust headers as needed
+    for month_name, aggregated_data in sorted(month_data_aggregated.items()):
+        data_to_insert.append([month_name] + aggregated_data)
 
-    # Add the aggregated month data to the data_to_insert list
-    for month_name in sorted_months:
-        data_to_insert.append(month_data_aggregated[month_name])
+    for _ in range(5):  # Add five empty rows after the last row of data for formatting
+        data_to_insert.append(['' for _ in range(len(data_to_insert[0]))])
 
-    # Add empty rows for formatting, if necessary
-    for _ in range(5):  # Adjust based on your needs
-        data_to_insert.append(['' for _ in range(COLUMNS_TO_COPY)])
+    end_column_letter = chr(64 + len(data_to_insert[0]))  # Calculate the letter for the last column
+    end_row_number = len(data_to_insert)  # Calculate the last row number
+    range_name = f'A1:{end_column_letter}{end_row_number}'  # Update the range string accordingly
 
-    # Update the sheet with aggregated data
-    months_summary_sheet.update(values=data_to_insert, range_name=f'A1:T{len(data_to_insert)}', value_input_option='USER_ENTERED')
-    normalize_data(spreadsheet, months_summary_sheet,'month')
+    # Update the sheet with the aggregated data, respecting the updated method signature
+    month_summary_sheet.update(values=data_to_insert, range_name=range_name, value_input_option='USER_ENTERED')
 
-
+    # Normalize data if required
+    normalize_data(spreadsheet, month_summary_sheet, 'month')
 
 
 

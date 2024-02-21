@@ -54,30 +54,30 @@ interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 
 # column_b_values = interim_campaigns_sheet.get_values('B3:B')
 
-# for date_row in range(3, interim_campaigns_sheet.row_count):
-# #  Check if the current cell value in column B is not None
-#     if date_row - 3< len(column_b_values) and column_b_values[ date_row - 3][0] is not None:  # Corrected the syntax and indexing here
-#         print(f'value= {column_b_values[ date_row - 3][0]} - previously processed ...')
-#         continue
-#     print(f'{date_row} PROCESSING column {column_index_to_string(column_letter_to_index(FB_TOTAL_COL)+5)} < - > {column_index_to_string(column_letter_to_index(FB_TOTAL_COL)+(len(FB_CAMPAIGNS))*7)} ')
-#     total_summary_section_format(date_row, Google_workbook, service) #Total summary formatted
-#     time.sleep(1)
-#     total_summary_section_format(date_row, Google_workbook, service,FB_TOTAL_COL) #Total FB summary formatted
-#     time.sleep(1)
-#     total_summary_section_format(date_row, Google_workbook, service,GOOGLE_TOTAL_COL) #Total GOOGLE summary formatted
-#     time.sleep(1)
-#     campaign_format_dates(date_row, Google_workbook, service, column_letter_to_index(FB_TOTAL_COL)+5,len(FB_CAMPAIGNS))
-#     time.sleep(1)
-#     campaign_format_dates(date_row, Google_workbook, service, column_letter_to_index(GOOGLE_TOTAL_COL)+5, len(GOOGLE_CAMPAIGNS))
+# for date_row in range(3, interim_campaigns_sheet.row_count+1):
+#  Check if the current cell value in column B is not None
+    # if date_row - 3< len(column_b_values) and column_b_values[ date_row - 3][0] is not None:  # Corrected the syntax and indexing here
+    #     print(f'value= {column_b_values[ date_row - 3][0]} - previously processed ...')
+    #     continue
+    # print(f'{date_row} PROCESSING column {column_index_to_string(column_letter_to_index(FB_TOTAL_COL)+5)} < - > {column_index_to_string(column_letter_to_index(FB_TOTAL_COL)+(len(FB_CAMPAIGNS))*7)} ')
+    # total_summary_section_format(date_row, Google_workbook, service) #Total summary formatted
+    # time.sleep(1)
+    # total_summary_section_format(date_row, Google_workbook, service,FB_TOTAL_COL) #Total FB summary formatted
+    # time.sleep(1)
+    # total_summary_section_format(date_row, Google_workbook, service,GOOGLE_TOTAL_COL) #Total GOOGLE summary formatted
+    # time.sleep(1)
+    # campaign_format_dates(date_row, Google_workbook, service, column_letter_to_index(FB_TOTAL_COL)+5,len(FB_CAMPAIGNS))
+    # time.sleep(1)
+    # campaign_format_dates(date_row, Google_workbook, service, column_letter_to_index(GOOGLE_TOTAL_COL)+5, len(GOOGLE_CAMPAIGNS))
 
 # # pauseMe('SMA1 - STEP-3 \n')
 # # ---------------- STEP-4 FORMATTED TOTAL SHEET CREATE  ---------------------------------
 # # STEP 10 - format rows per week per month 
-restructure_to_weekly(interim_campaigns_sheet,spreadsheet,TOTAL_CAMPAIGNS_SHEET_NAME)
+# restructure_to_weekly(interim_campaigns_sheet,spreadsheet,TOTAL_CAMPAIGNS_SHEET_NAME)
 # # pauseMe('SMA1 - STEP-4 \n')
 # # ---------------- STEP-5 CREATE TOTAL WEEKS Sheet with Graph  ---------------------------------
 
-create_weeks_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))
+# create_weeks_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))
 # # pauseMe('SMA1 - STEP-5 \n')
 
 create_months_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))

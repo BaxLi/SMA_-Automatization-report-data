@@ -28,7 +28,7 @@ FB_CAMPAIGNS = [
     "nBAU | FB"
 ]
 GOOGLE_CAMPAIGNS = [
-    "Brand Protect | MCPC","Denti Fissi | MCPC -19.12", "Main KW | MCPC - 19.12", "nBAU | Google"
+    "BAU | Brand","Denti Fissi | MCPC -19.12", "Main KW | MCPC - 19.12", "nBAU | Google"
 ]
 
 interim_campaigns_sheet_name='InterimCampaigns'

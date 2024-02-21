@@ -48,6 +48,8 @@ def total_summary_section_format(date_row, workbook_id=None, service=None, start
     start_col_index = column_letter_to_index(start_col)-2 if start_col is not None else 0
     tp="CURRENCY" if start_col is not None else "PERCENT"
     tp_val='"€"#,##0.00' if start_col is not None else "0.00%"
+    tp_cpl="NUMBER" if start_col is not None else "CURRENCY"
+    tp_cpl_f='#0' if start_col is not None else '"€"#,##0.00'
     # print(f'{start_col}+1=Index {start_col_index}')
 
     # Define column formats in a more maintainable structure
@@ -55,7 +57,7 @@ def total_summary_section_format(date_row, workbook_id=None, service=None, start
         (start_col_index+1, "CURRENCY", '"€"#,##0.00'),  # Ad Spend
         (start_col_index+2, "NUMBER", "#0"),              # Impressions
         (start_col_index+3, "NUMBER", "#0"),              # Total Leads
-        (start_col_index+4, "NUMBER", "#0"),              # Total Comments
+        (start_col_index+4, tp_cpl, tp_cpl_f),              # Total Comments
         (start_col_index+5, tp, tp_val),  # Total CPL  - OR - % of Facebook in common total
         (start_col_index+6, tp, tp_val),  # Total CPComments - OR - % of GOOGEL in common total
     ]
@@ -242,11 +244,13 @@ def add_up_down_borders_to_rows(worksheet, start_row_index, end_row_index, borde
     }
     service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
 
-def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CPL - Weekly"):
+def add_summary_chart_OLD(worksheet, startsLineWith, chart_title="SPEND x Leads x CPL - Weekly"):
+    print('EXECUTE - add_summary_chart')
     last_data_row_index = worksheet.row_count 
     print(f'last_data_row_index={last_data_row_index}')
 
     column_a_values = worksheet.col_values(1)
+    print(f'column_a_values = {column_a_values}')
     last_data_row_index = None
 
     # Iterate in reverse to find the last occurrence
@@ -254,7 +258,9 @@ def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CP
         if value.startswith(startsLineWith):
             last_data_row_index = index + 1  # +1 because enumerate starts at 0
             break
-
+        if startsLineWith=='month':
+            last_data_row_index = index + 1  # +1 because enumerate starts at 0
+            break
     print(f'2 - last_data_row_index={last_data_row_index}')
 
     # Define the chart request body
@@ -285,7 +291,7 @@ def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CP
                                                 "sources": [
                                                     {
                                                         "sheetId": worksheet.id,
-                                                        "startRowIndex": 1,  # Assuming header is in the first row
+                                                        "startRowIndex": 0,  # Assuming header is in the first row
                                                         "endRowIndex": last_data_row_index,
                                                         "startColumnIndex": 0,  # Weeks column
                                                         "endColumnIndex": 1
@@ -302,7 +308,7 @@ def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CP
                                                 "sources": [
                                                     {
                                                         "sheetId": worksheet.id,
-                                                        "startRowIndex": 1,  # Assuming header is in the first row
+                                                        "startRowIndex": 0,  # Assuming header is in the first row
                                                         "endRowIndex": last_data_row_index,
                                                         "startColumnIndex": i,
                                                         "endColumnIndex": i + 1
@@ -311,7 +317,7 @@ def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CP
                                             }
                                         },
                                         "targetAxis": "LEFT_AXIS"
-                                    } for i in range(1, 7)  # Assuming you have 20 columns of data
+                                    } for i in range(1, 6)  # Assuming you have  columns of data
                                 ],
                                 "headerCount": 1
                             }
@@ -320,7 +326,7 @@ def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CP
                             "overlayPosition": {
                                 "anchorCell": {
                                     "sheetId": worksheet.id,
-                                    "rowIndex": last_data_row_index+5,  # Positioning the chart after the last row of data and empty rows
+                                    "rowIndex": last_data_row_index+2,  # Positioning the chart after the last row of data and empty rows
                                     "columnIndex": 10  # Starting from the first column
                                 },
                                 "offsetXPixels": 0,  # Adjust as needed
@@ -335,6 +341,117 @@ def add_summary_chart(worksheet, startsLineWith, chart_title="SPEND x Leads x CP
 
     # Send the request to the API
     response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
+
+def add_summary_chart(worksheet, startsLineWith, chart_title, columns_to_chart, start_cell="G15", width=600, height=200):
+    print('EXECUTE - add_summary_chart')
+    last_data_row_index = worksheet.row_count 
+    print(f'last_data_row_index={last_data_row_index}')
+
+    column_a_values = worksheet.col_values(1)
+    # print(f'column_a_values = {column_a_values}')
+    last_data_row_index = None
+
+    # Iterate in reverse to find the last occurrence
+    for index, value in reversed(list(enumerate(column_a_values))):
+        if value.startswith(startsLineWith):
+            last_data_row_index = index + 1  # +1 because enumerate starts at 0
+            break
+        if startsLineWith=='month':
+            last_data_row_index = len(column_a_values)  # +1 because enumerate starts at 0
+            break
+
+    print(f'2 - last_data_row_index={last_data_row_index}')
+
+    # Get the index of the columns to chart from the header
+    header = worksheet.row_values(1)
+    column_indices_to_chart = [header.index(col) for col in columns_to_chart if col in header]
+
+    # Define the chart request body
+    requests = {
+        "requests": [
+            {
+                "addChart": {
+                    "chart": {
+                        "spec": {
+                            "title": chart_title,
+                            "basicChart": {
+                                "chartType": "LINE",
+                                "legendPosition": "BOTTOM_LEGEND",
+                                "axis": [
+                                    {
+                                        "position": "BOTTOM_AXIS",
+                                        "title": "Weeks"
+                                    },
+                                    {
+                                        "position": "LEFT_AXIS",
+                                        "title": "Values"
+                                    }
+                                ],
+                                "domains": [
+                                    {
+                                        "domain": {
+                                            "sourceRange": {
+                                                "sources": [
+                                                    {
+                                                        "sheetId": worksheet.id,
+                                                        "startRowIndex": 0,
+                                                        "endRowIndex": last_data_row_index,
+                                                        "startColumnIndex": 0,  # Weeks column
+                                                        "endColumnIndex": 1
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ],
+                                "series": [
+                                    {
+                                        "series": {
+                                            "sourceRange": {
+                                                "sources": [
+                                                    {
+                                                        "sheetId": worksheet.id,
+                                                        "startRowIndex": 0,
+                                                        "endRowIndex": last_data_row_index,
+                                                        "startColumnIndex": col_index,
+                                                        "endColumnIndex": col_index + 1
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "targetAxis": "LEFT_AXIS"
+                                    } for col_index in column_indices_to_chart
+                                ],
+                                "headerCount": 1
+                            }
+                        },
+                        "position": {
+                            "overlayPosition": {
+                                "anchorCell": {
+                                    "sheetId": worksheet.id,
+                                    "rowIndex": int(start_cell[1:])-1,  # Convert cell row to 0-indexed
+                                    "columnIndex": column_letter_to_index(start_cell[0])  # Convert column letter to 0-indexed
+                                },
+                                "offsetXPixels": 0,
+                                "offsetYPixels": 0,
+                                "widthPixels": width,
+                                "heightPixels": height
+                            },
+                        }
+                    }
+                }
+            }
+        ]
+    }
+   
+    # print(f'column_letter_to_index(start_cell[0])={column_letter_to_index(start_cell[0])} rowIndex={int(start_cell[1:])-1}')
+
+    # Send the request to the API
+    response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
+
+
+
+
 
 def add_chart_to_sheet(worksheet, chart_title, data_column_letter,
                     chart_place_to_row=15, chart_place_to_col=2):
