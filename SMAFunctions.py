@@ -221,13 +221,12 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
         data_fb = pd.DataFrame(FB_data_exp_sheet.get_all_records())
     except WorksheetNotFound:
         print("Facebook Export Data sheet not found.")
-        pauseMe(1)
+        pauseMe("Facebook Export Data sheet not found.")
         data_fb = pd.DataFrame()
 
     try:
         GOOGLE_data_exp_sheet = spreadsheet.worksheet('Google Export Data')
         data_google = pd.DataFrame(GOOGLE_data_exp_sheet.get_all_records())
-        data_google['Campaign name'] = data_google['Campaign name'].replace('SMA | Search | BAU | Brand Protect | MCPC', 'SMA | Search | BAU | Brand', regex=True)
     except WorksheetNotFound:
         print("Google Export Data sheet not found.")
         pauseMe('Google export to read')
@@ -237,6 +236,7 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     if data_fb.empty and data_google.empty:
         print("No data to process.")
         return
+    print(f'data_fb.size ={data_fb.shape}   data_google={data_google.shape}     ')
 
     # Define replacements in a more streamlined way
     replacements = {
@@ -251,7 +251,7 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
                 df.rename(columns={old: new}, inplace=True)
 
     data = pd.concat([data_fb, data_google], ignore_index=True)
-
+    print(f'concatenated data={data.shape}')
     # Convert numerical columns to float and fill missing values
     data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']] = data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']].apply(pd.to_numeric, errors='coerce').fillna(0)
 
@@ -266,9 +266,11 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
         return 'Other'
 
     data['Determined Campaign'] = data['AdSet name'].apply(determine_campaign)
+    # Now, replace all instances of 'Brand Protect | MCPC' with 'BAU | Brand' in the 'Determined Campaign' column
+    data['Determined Campaign'] = data['Determined Campaign'].replace('Brand Protect | MCPC', 'BAU | Brand')
 
     # Aggregate data
-    grouped = data.groupby(['Date', 'Determined Campaign']).sum().reset_index()
+    grouped = data.groupby(['Date', 'Determined Campaign', 'Ad Spend', ]).sum().reset_index()
     grouped = grouped.drop(columns=['AdSet name'])
 
     # Write to 'campaign_exp_sheet'
@@ -276,7 +278,7 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     try:
         campaign_exp_sheet = spreadsheet.worksheet(sheet_title)
     except WorksheetNotFound:
-        campaign_exp_sheet = spreadsheet.add_worksheet(title=sheet_title, rows="100", cols="20")
+        campaign_exp_sheet = spreadsheet.add_worksheet(title=sheet_title, rows="2000", cols="20")
 
     campaign_exp_sheet.clear()  # Clear before updating to avoid appending to old data
     campaign_exp_sheet.update(values=[grouped.columns.values.tolist()] + grouped.values.tolist(), range_name='A1' )
@@ -928,20 +930,17 @@ def normalize_data(spreadsheet, sheet, period='week'):
     normalized_sheet = spreadsheet.add_worksheet(title=f'Normalized Data '+period, rows=df_normalized.shape[0]+10, cols=len(df_normalized.columns)+10)
     # Prepare the data for update, including the header
     normalized_data = [df.columns.tolist()] +  df_normalized.values.tolist()
-    print('Normalized Data')
-    print(f'{normalized_data}')
+    # print('Normalized Data')
+    # print(f'{normalized_data}')
     
     for _ in range(37):  # Add five empty rows after the last row of data
         normalized_data.append(['' for _ in range(len(normalized_data[0]))])
 
  # Update the sheet with normalized data
     normalized_sheet.update(values=normalized_data, range_name='A1', value_input_option='USER_ENTERED') #started range = A1 !
-    if period=='week':
-        add_summary_chart(normalized_sheet, "Week","TOTAL", ['Totals', 'BAU | Brand_Impressions'], "G1")
-        add_summary_chart(normalized_sheet, "Week","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
-    if period=='month':
-        add_summary_chart(normalized_sheet, "month","TOTAL", ['Totals', 'BAU | Brand_Impressions'], "G1")
-        add_summary_chart(normalized_sheet, "month","Per BRAND ", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "F11")
+    add_summary_chart(normalized_sheet, period,"TOTAL", ['Totals', 'BAU | Brand_Impressions'], "G1")
+    add_summary_chart(normalized_sheet, period,"Per BRAND ", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "F11")
+
         # add_summary_chart(normalized_sheet, "Totals","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
 
     return df_normalized

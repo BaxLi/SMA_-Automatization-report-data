@@ -444,14 +444,10 @@ def add_summary_chart(worksheet, startsLineWith, chart_title, columns_to_chart, 
         ]
     }
    
-    # print(f'column_letter_to_index(start_cell[0])={column_letter_to_index(start_cell[0])} rowIndex={int(start_cell[1:])-1}')
+   # print(f'column_letter_to_index(start_cell[0])={column_letter_to_index(start_cell[0])} rowIndex={int(start_cell[1:])-1}')
 
     # Send the request to the API
     response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
-
-
-
-
 
 def add_chart_to_sheet(worksheet, chart_title, data_column_letter,
                     chart_place_to_row=15, chart_place_to_col=2):
