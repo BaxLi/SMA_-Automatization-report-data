@@ -572,6 +572,33 @@ def color_rows_in_export(sheet,row_format_updates):
     body=body
     ).execute()
 
+def sortSheetByDateFromCol(sheet, col='A', order = 'ASCENDING'):
+    print(f'{sheet.id} + {sheet.spreadsheet_id} + column_letter_to_index(col)={column_letter_to_index(col)}')
+    requests = []
+    requests.append({
+                "sortRange": {
+                        "range": {
+                                "sheetId": sheet.id, # You need to provide the specific ID of the sheet you want to sort
+                                "startRowIndex": 2, # Row index starts at 0, so 1 means starting from row 2
+                                "startColumnIndex": column_letter_to_index(col)-1, # Column A
+                                "endColumnIndex": column_letter_to_index(col) # Only sorting by Column A, so start and end ColumnIndex is 0 and 1 respectively
+                                },
+                        "sortSpecs": [
+                            {
+                                "dimensionIndex": 0, # Sorting by the first column (Column A)
+                                "sortOrder": order # Sorting in ascending order
+                            }
+                        ]
+                    }
+    })
+    body = {
+    "requests": requests
+    }
+
+    response = service.spreadsheets().batchUpdate(
+    spreadsheetId=sheet.spreadsheet_id,
+    body=body
+    ).execute()
 
 
 
