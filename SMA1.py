@@ -36,19 +36,19 @@ campaign_exp_sheet = spreadsheet.worksheet(commonExportedCampaignsSheet)
 # # Access the 'Interim' sheet with predefined structure
 interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 
-fillInterimCampaignsDataColumn(interim_campaigns_sheet, campaign_exp_sheet ) 
-interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
-time.sleep(1)
-step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet)
-time.sleep(1)
-step_Campaign_totals(interim_campaigns_sheet, FB_TOTAL_COL, GOOGLE_TOTAL_COL) #Calculate FB TOTALS 
-time.sleep(1)
-# pauseMe(334)
-step_Campaign_totals(interim_campaigns_sheet, GOOGLE_TOTAL_COL) #Calculate GOOGLE TOTALS
-time.sleep(1)
-# pauseMe(334)
-step2_Totals_Calc(interim_campaigns_sheet) #Calculate TOTAL summary 
-time.sleep(1)
+# fillInterimCampaignsDataColumn(interim_campaigns_sheet, campaign_exp_sheet ) 
+# interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
+# time.sleep(1)
+# step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet)
+# time.sleep(1)
+# step_Campaign_totals(interim_campaigns_sheet, FB_TOTAL_COL, GOOGLE_TOTAL_COL) #Calculate FB TOTALS 
+# time.sleep(1)
+# # pauseMe(334)
+# step_Campaign_totals(interim_campaigns_sheet, GOOGLE_TOTAL_COL) #Calculate GOOGLE TOTALS
+# time.sleep(1)
+# # pauseMe(334)
+# step2_Totals_Calc(interim_campaigns_sheet) #Calculate TOTAL summary 
+# time.sleep(1)
 
 # pauseMe('SMA1 - STEP-2 \n')
 
@@ -75,7 +75,7 @@ time.sleep(1)
 # # pauseMe('SMA1 - STEP-3 \n')
 # # ---------------- STEP-4 FORMATTED TOTAL SHEET CREATE  ---------------------------------
 # # STEP 10 - format rows per week per month 
-restructure_to_weekly(interim_campaigns_sheet,spreadsheet,TOTAL_CAMPAIGNS_SHEET_NAME)
+# restructure_to_weekly(interim_campaigns_sheet,spreadsheet,TOTAL_CAMPAIGNS_SHEET_NAME)
 # # pauseMe('SMA1 - STEP-4 \n')
 # # ---------------- STEP-5 CREATE TOTAL WEEKS Sheet with Graph  ---------------------------------
 

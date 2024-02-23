@@ -1067,7 +1067,7 @@ def normalize_data(spreadsheet, sheet, period='week'):
     normalized_sheet.update(values=normalized_data, range_name='A1', value_input_option='USER_ENTERED') #started range = A1 !
     add_summary_chart(normalized_sheet, period,"TOTAL", ['Totals', 'BAU | Brand_Impressions'], "I1", width=800, height=300)
     add_summary_chart(normalized_sheet, period,"Per BRAND ", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "H17", width=800, height=300)
-    add_summary_chart(normalized_sheet, period,"Internal LEADS ", ['FB_Total', 'Google_Total','Internal Leads CPL'], "A10", width=600, height=300)
+    add_summary_chart(normalized_sheet, period,"Internal LEADS ", ['FB_Total', 'Google_Total','Internal Leads','Internal Leads CPL'], "A10", width=600, height=300)
 
         # add_summary_chart(normalized_sheet, "Totals","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
     return df_normalized
