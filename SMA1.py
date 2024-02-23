@@ -74,11 +74,11 @@ interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 # # pauseMe('SMA1 - STEP-3 \n')
 # # ---------------- STEP-4 FORMATTED TOTAL SHEET CREATE  ---------------------------------
 # # STEP 10 - format rows per week per month 
-restructure_to_weekly(interim_campaigns_sheet,spreadsheet,TOTAL_CAMPAIGNS_SHEET_NAME)
+# restructure_to_weekly(interim_campaigns_sheet,spreadsheet,TOTAL_CAMPAIGNS_SHEET_NAME)
 # # pauseMe('SMA1 - STEP-4 \n')
 # # ---------------- STEP-5 CREATE TOTAL WEEKS Sheet with Graph  ---------------------------------
 
-# create_weeks_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))
+create_weeks_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))
 # # # pauseMe('SMA1 - STEP-5 \n')
 
 # create_months_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))

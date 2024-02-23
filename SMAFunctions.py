@@ -624,6 +624,7 @@ def insert_week_and_month_totals(total_sheet):
 
 def colB_Month_Sum(row_index, mysheet, FB_Summary_COL='J', GOOGLE_Summary_COL='BT'):
     print('colB_Month_Sum START')
+    end_row = row_index - 1
     # Fetch the entire first column at once
     first_col_values = mysheet.col_values(1)
 
@@ -632,16 +633,29 @@ def colB_Month_Sum(row_index, mysheet, FB_Summary_COL='J', GOOGLE_Summary_COL='B
     while idx > 2 and not (first_col_values[idx-1].startswith('TOTAL') or first_col_values[idx-1].startswith('Date')):
         idx -= 1
     idx=idx+1
+    start_row=idx
     sum_formulas = []
+    special_formulas = {
+    'H': f"=IF(B{row_index}<>0,{FB_Summary_COL}{row_index}/B{row_index},0)",
+    'I': f"=IF(B{row_index}<>0,{GOOGLE_Summary_COL}{row_index}/B{row_index},0)",
+    'G': f"=IF(F{row_index}<>0,B{row_index}/F{row_index},0)",
+    'E': f"=IF(D{row_index}<>0,B{row_index}/D{row_index},0)"
+        } 
     # Generate the formulas for the all columns starts from B
     for col_index in range(2, mysheet.col_count ):  # Assuming total_sheet.col_count gives the number of columns
         col_letter = column_index_to_string(col_index) # Convert column index to letter
-        if col_letter=='H' or col_letter=="I":
-            myCol= FB_Summary_COL if col_letter=='H' else GOOGLE_Summary_COL
-            sum_formula=f"=IF(B{row_index}<>0,{myCol}{row_index}/B{row_index},0)"
+        if col_letter in special_formulas:
+            sum_formula = special_formulas[col_letter]
         else:
-            sum_formula = f"=SUM({col_letter}{idx}:{col_letter}{row_index-1})/2"
+            sum_formula = f"=SUM({col_letter}{start_row}:{col_letter}{end_row})/2"
         sum_formulas.append(sum_formula)
+        # if col_letter=='H' or col_letter=="I":
+        #     myCol= FB_Summary_COL if col_letter=='H' else GOOGLE_Summary_COL
+        #     sum_formula=f"=IF(B{row_index}<>0,{myCol}{row_index}/B{row_index},0)"
+        # else:
+        #     sum_formula = f"=SUM({col_letter}{idx}:{col_letter}{row_index-1})/2"
+        # sum_formulas.append(sum_formula)
+
     range_to_update = f"B{row_index}:{column_index_to_string(mysheet.col_count - 1)}{row_index}"
     mysheet.update(values=[sum_formulas],range_name=range_to_update, value_input_option='USER_ENTERED' )
     time.sleep(1)
@@ -653,17 +667,18 @@ def colB_Week_Sum(adjusted_row_index, total_sheet, FB_Summary_COL='J', GOOGLE_Su
     end_row = adjusted_row_index - 1
     start_row = identify_non_numerical_cell_in_column_B(end_row, total_sheet)
     sum_formulas = []
-    print(f' LINE 636 total_sheet.col_count ={total_sheet.col_count}') 
+    print(f' LINE 636 total_sheet.col_count ={total_sheet.col_count}')
+    special_formulas = {
+    'H': f"=IF(B{end_row+1}<>0,{FB_Summary_COL}{end_row+1}/B{end_row+1},0)",
+    'I': f"=IF(B{end_row+1}<>0,{GOOGLE_Summary_COL}{end_row+1}/B{end_row+1},0)",
+    'G': f"=IF(B{end_row+1}<>0,B{end_row+1}/F{end_row+1},0)",
+    'E': f"=IF(B{end_row+1}<>0,B{end_row+1}/D{end_row+1},0)"
+        } 
     # Generate the formulas for the remaining columns
     for col_index in range(2, total_sheet.col_count ):  # Assuming total_sheet.col_count gives the number of columns
         col_letter = column_index_to_string(col_index) #string.ascii_uppercase[col_index - 1]  # Convert column index to letter
-        if col_letter=="H" or col_letter=="I":
-            myCol= FB_Summary_COL if col_letter=='H' else GOOGLE_Summary_COL
-            sum_formula=f"=IF(B{end_row+1}<>0,{myCol}{end_row+1}/B{end_row+1},0)"
-        if col_letter=="G" or col_letter=="E":
-                if col_letter=='G': myCol= 'F'
-                if col_letter=='E': myCol= 'D'
-                sum_formula=f"=IF(B{end_row+1}<>0,B{end_row+1}/{myCol}{end_row+1},0)"
+        if col_letter in special_formulas:
+            sum_formula = special_formulas[col_letter]
         else:
             sum_formula = f"=SUM({col_letter}{start_row+1}:{col_letter}{end_row})"
         sum_formulas.append(sum_formula)
@@ -853,13 +868,16 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
     # Get all the data from the source sheet
     source_data = source_sheet.get_all_values()
     headers = source_data[0]  # Assuming row 1 contains headers
-    FB_Summary_COL = headers.index('TOTAL Summary FB') + 1
-    GOOGLE_Summary_COL=headers.index('TOTAL Summary Google') + 1
+    headers1 = source_data[1]  # Assuming row 1 contains headers
     # Identify columns to copy
     b_column_index = 1  # Column 'B' is at index 1
     bau_brand_column_index = next((i for i, value in enumerate(source_data[0]) if 'BAU | Brand' in value), None)
-    fb_total_col_index = FB_Summary_COL-1   # Convert to index
-    google_total_col_index = GOOGLE_Summary_COL-1
+    bau_brand_column_index +=1
+    fb_total_col_index = headers.index('TOTAL Summary FB') 
+    google_total_col_index = headers.index('TOTAL Summary Google')
+    internal_leads_col_index = headers1.index('Internal Leads')
+    internal_leads_cpl_col_index = headers1.index('Internal leads CPL')
+
     print(f'bau_brand_column_index={bau_brand_column_index}')
     # Ensure BAU | Brand column was found
     if bau_brand_column_index is None:
@@ -876,7 +894,9 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
                 float(row[b_column_index].replace('€', '').replace(',', '').strip() if row[b_column_index] else 0),
                 float(row[fb_total_col_index].replace('€', '').replace(',', '').strip() if row[fb_total_col_index] else 0),
                 float(row[google_total_col_index].replace('€', '').replace(',', '').strip() if row[google_total_col_index] else 0),
-                float(row[bau_brand_column_index+1].replace('€', '').replace(',', '').strip() if row[bau_brand_column_index] else 0)
+                float(row[bau_brand_column_index].replace('€', '').replace(',', '').strip() if row[bau_brand_column_index] else 0),
+                float(row[internal_leads_col_index].replace('€', '').replace(',', '').strip() if row[internal_leads_col_index] else 0),
+                float(row[internal_leads_cpl_col_index].replace('€', '').replace(',', '').strip() if row[internal_leads_cpl_col_index] else 0)
             ]
             if week_number not in week_data_aggregated:
                 week_data_aggregated[week_number] = values
@@ -897,6 +917,8 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
     headers = ["Weeks", "Totals", "FB_Total", "Google_Total"]
     if bau_brand_column_index is not None:
         headers.append(source_data[0][bau_brand_column_index]+'_Impressions')
+    headers.append('Internal Leads')
+    headers.append('Internal Leads CPL')
     data_to_insert = [headers]
 
     for week_number, aggregated_data in sorted(week_data_aggregated.items(), key=lambda x: int(x[0])):
@@ -944,6 +966,8 @@ def normalize_data(spreadsheet, sheet, period='week'):
         'FB_Total': 1,
         'Google_Total': 2,
         'BAU | Brand_Impressions': 3,
+        'Internal Leads':4,
+        'Internal Leads CPL':5,
         # Add more if needed, like 'Total cpComments': X, where X is the increment for that column
     }
 
@@ -971,8 +995,9 @@ def normalize_data(spreadsheet, sheet, period='week'):
 
  # Update the sheet with normalized data
     normalized_sheet.update(values=normalized_data, range_name='A1', value_input_option='USER_ENTERED') #started range = A1 !
-    add_summary_chart(normalized_sheet, period,"TOTAL", ['Totals', 'BAU | Brand_Impressions'], "G1", width=800, height=300)
-    add_summary_chart(normalized_sheet, period,"Per BRAND ", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "F17", width=800, height=300)
+    add_summary_chart(normalized_sheet, period,"TOTAL", ['Totals', 'BAU | Brand_Impressions'], "I1", width=800, height=300)
+    add_summary_chart(normalized_sheet, period,"Per BRAND ", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "H17", width=800, height=300)
+    add_summary_chart(normalized_sheet, period,"Internal LEADS ", ['FB_Total', 'Google_Total','Internal Leads CPL'], "A10", width=600, height=300)
 
         # add_summary_chart(normalized_sheet, "Totals","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
 
