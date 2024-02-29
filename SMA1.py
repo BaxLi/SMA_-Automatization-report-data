@@ -26,14 +26,14 @@ print(f'LINE 22 - after open Google spreadsheet !')
 
 # # ------------------ STEP-1 - Collect data into campaign_exp_sheet -------------------------------
 
-step1_v2_commonCampaignSheetCreate(spreadsheet)
-# pauseMe('SMA1 - STEP-1 \n')
+# step1_v2_commonCampaignSheetCreate(spreadsheet)
+# # pauseMe('SMA1 - STEP-1 \n')
 
-# # # ---------------- STEP-2  Manipulate InterimCampaigns sheet---------------------------------
+# # # # ---------------- STEP-2  Manipulate InterimCampaigns sheet---------------------------------
 
-# # Reload values from the worksheet where your COMMON campaign data is stored
+# # # Reload values from the worksheet where your COMMON campaign data is stored
 campaign_exp_sheet = spreadsheet.worksheet(commonExportedCampaignsSheet)
-# # Access the 'Interim' sheet with predefined structure
+# # # Access the 'Interim' sheet with predefined structure
 interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 
 # fillInterimCampaignsDataColumn(interim_campaigns_sheet, campaign_exp_sheet ) 
@@ -72,14 +72,14 @@ interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 #     time.sleep(1)
 #     campaign_format_dates(date_row, Google_workbook, service, column_letter_to_index(GOOGLE_TOTAL_COL)+5, len(GOOGLE_CAMPAIGNS))
 
-# # pauseMe('SMA1 - STEP-3 \n')
+# pauseMe('SMA1 - STEP-3 \n')
 # # ---------------- STEP-4 FORMATTED TOTAL SHEET CREATE  ---------------------------------
 # # STEP 10 - format rows per week per month 
 # restructure_to_weekly(interim_campaigns_sheet,spreadsheet,TOTAL_CAMPAIGNS_SHEET_NAME)
 # # pauseMe('SMA1 - STEP-4 \n')
 # # ---------------- STEP-5 CREATE TOTAL WEEKS Sheet with Graph  ---------------------------------
 
-create_weeks_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))
+# create_weeks_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))
 # # # pauseMe('SMA1 - STEP-5 \n')
 
 create_months_summary_sheet(spreadsheet, spreadsheet.worksheet(TOTAL_CAMPAIGNS_SHEET_NAME))

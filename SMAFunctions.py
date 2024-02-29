@@ -38,32 +38,32 @@ def fillInterimCampaignsDataColumn(interim, toexport):
     # print(f'interim_dates_str={sorted_interim_dates }')
 
     latest_date = max(sorted_interim_dates + toexport_dates)
-    earliest_date = standardize_date('2024-01-01')
+    earliest_date = min(sorted_interim_dates + toexport_dates)
+    print(f'earliest_date={earliest_date}            latest_date={latest_date}\n')
 
     # Generate all dates from earliest to latest
     dt=[earliest_date + timedelta(days=i) for i in range((latest_date - earliest_date).days + 1)]
     all_dates = reversed(dt)
-    # print(f'alldates={dt}')
+    print(f'alldates={dt}')
 
     # Determine the number of rows to add if there aren't enough
     rows_to_add = len(dt) - interim.row_count + INTERIM_SHEET_DATA - 1  # Subtract the number of existing rows and adjust for the header
     need_to_delete_Latest=False
     if rows_to_add>0:
-        interim.append_row([0]*1)
+        interim.append_row(['']*1)
         need_to_delete_Latest=True
 
     # Find and insert missing dates
     for date in all_dates:
         if date not in sorted_interim_dates :
             formatted_date = date.strftime("%Y-%m-%d")
-            print(f"Inserting missed date: {formatted_date}")
             # Find the correct position (row index) to insert the new date
             # Determine where to insert the new date
             position_to_insert = find_insert_position(interim_dates, formatted_date)
+            print(f"Inserting missed date: {formatted_date}, position_to_insert={position_to_insert}")
             interim.insert_row([formatted_date], position_to_insert)
-            time.sleep(1)
+            time.sleep(2)
             # Note: This example inserts at the end. You might want to adjust the insertion logic.
-
             # Update the sorted_interim_dates list to include the newly added date
             sorted_interim_dates.append(date)
             sorted_interim_dates.sort()  # Ensure the list is sorted after insertion
@@ -436,7 +436,7 @@ def step_Campaign_totals(interim_campaigns_sheet, start_totals_column, last_colu
     # Calculate the update range
     update_range = f"{start_totals_column}3:{column_index_to_string(start_index + 5)}{len(all_data) + 1}"
     # Batch update the sheet with all calculated formulas at once
-    interim_campaigns_sheet.update(update_range, rows_to_update, value_input_option='USER_ENTERED')
+    interim_campaigns_sheet.update(values=rows_to_update, range_name=update_range,  value_input_option='USER_ENTERED')
 
 def step2_Totals_Calc(interim_campaigns_sheet, total_col=TOTAL_TOTAL_COL, fb_col=FB_TOTAL_COL, google_col=GOOGLE_TOTAL_COL):
     print('step2 Totals_Calc filling')
@@ -559,7 +559,6 @@ def insert_week_and_month_totals_OLD(total_sheet):
             previous_week_number = current_week_number
 
 
-
 def insert_week_and_month_totals(total_sheet):
     # Fetch all the dates from column 'A', starting from row 3 to skip headers
     dates = total_sheet.col_values(1)[INTERIM_SHEET_DATA:]
@@ -569,6 +568,7 @@ def insert_week_and_month_totals(total_sheet):
 
     # Initialize the previous week number to None for comparison
     previous_week_number = None
+    current_year = None
     dates_pairs = zip(dates, dates[1:] + [None]) # Ensure the last date handles end of data
 
     for i, (date_str, next_date_str) in enumerate(dates_pairs, start=3):
@@ -577,6 +577,12 @@ def insert_week_and_month_totals(total_sheet):
             date_obj = datetime.strptime(date_str, '%A, %B %d, %Y')
             current_week_number = date_obj.isocalendar()[1]
             month = date_obj.month
+            year = date_obj.year  # Track the year of the current date
+
+            # Check for year change
+            if current_year is not None and year != current_year:
+                # Reset the previous week number when the year changes
+                previous_week_number = None
 
             is_last_day_of_month = False
             # Determine if it's the last day of the month
@@ -586,7 +592,7 @@ def insert_week_and_month_totals(total_sheet):
             else:  # This means it's the last date in the list
                 is_last_day_of_month = True
 
-            print(f' ---->     month={month} nextDay={next_day} is_last_day_of_month={is_last_day_of_month} \n')
+            print(f' ---->     month={month} nextDay={next_day} is_last_day_of_month={is_last_day_of_month}  previous_week_number={previous_week_number} \n')
 
             # Determine if the week number has changed (indicating a new week) or it's the last day of the month
             if current_week_number != previous_week_number or is_last_day_of_month:
@@ -594,8 +600,8 @@ def insert_week_and_month_totals(total_sheet):
                 adjusted_row_index = i + inserted_rows_count
 
                 # Insert a row for the current week number if it has changed
-                if (current_week_number != previous_week_number) & (previous_week_number is not None):
-                    total_sheet.insert_row(["Week - " + str(previous_week_number)], adjusted_row_index)
+                if (current_week_number != previous_week_number and previous_week_number is not None) or is_last_day_of_month:
+                    total_sheet.insert_row(["Week - " + str(previous_week_number)+", "+str(year)], adjusted_row_index)
                     time.sleep(2)
                     # Insert the SUM formula for column B and replicate it across the row
                     colB_Week_Sum(adjusted_row_index,  total_sheet)
@@ -606,7 +612,7 @@ def insert_week_and_month_totals(total_sheet):
                 # If it's the last day of the month, insert a row for month totals
                 if is_last_day_of_month:
                     print(f' Last day of Month ! \n')
-                    total_sheet.insert_row(["Week - " + str(current_week_number)], adjusted_row_index+1)
+                    total_sheet.insert_row(["Week - " + str(current_week_number)+", "+str(year)], adjusted_row_index+1)
                     time.sleep(1)
                     # Insert the SUM formula for column B and replicate it across the row
                     colB_Week_Sum(adjusted_row_index+1,  total_sheet)
@@ -614,13 +620,14 @@ def insert_week_and_month_totals(total_sheet):
                     adjusted_row_index += 1  # Adjust the row index for possible next insertion
                     month_name = date_obj.strftime('%B')
                     time.sleep(1)
-                    total_sheet.insert_row(["TOTAL " + month_name], adjusted_row_index+1)
+                    total_sheet.insert_row(["TOTAL " + month_name+", "+str(year)], adjusted_row_index+1)
                     time.sleep(1)
                     colB_Month_Sum(adjusted_row_index+1, total_sheet)
                     inserted_rows_count += 1  # Update the count of inserted rows
 
             # Update the previous week number for the next iteration
             previous_week_number = current_week_number
+            current_year = year
 
 
 def colB_Month_Sum(row_index, mysheet, FB_Summary_COL='J', GOOGLE_Summary_COL='BT'):
@@ -911,7 +918,7 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
         pass
 
     weeks_summary_sheet = spreadsheet.add_worksheet(title='WeeksSummary', rows=str(len(week_data_aggregated) + 5), cols="20")
-
+    print(f'week_data_aggregated={week_data_aggregated}')
      # Prepare and insert the data into 'WeeksSummary'
 
     headers = ["Weeks", "Totals", "FB_Total", "Google_Total"]
@@ -921,7 +928,9 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
     headers.append('Internal Leads CPL')
     data_to_insert = [headers]
 
-    for week_number, aggregated_data in sorted(week_data_aggregated.items(), key=lambda x: int(x[0])):
+    for week_number, aggregated_data in sorted(week_data_aggregated.items(), 
+                                            key=lambda x: (int(x[0].split(',')[1].strip()), int(x[0].split(',')[0].strip()))
+                                               ):
         data_to_insert.append([f"Week-{week_number}"] + aggregated_data)
 
     print('data_to_insert')
@@ -963,7 +972,9 @@ def create_months_summary_sheet(spreadsheet, source_sheet):
     # Filter out the rows where column A starts with 'TOTAL' and aggregate the data
     for row in source_data:
         if row[0].startswith('TOTAL'):
-            month_name = row[0].split(' ')[1].strip()  # Extract the month name
+            splt= row[0].split(' ')
+            month_name =splt[1].strip()+splt[2].strip()  # Extract the month name
+            print(f'HEY {row[0]} --- {month_name} \n')
             # Extract and convert values for each required column
             values = [
                             float(row[b_column_index].replace('€', '').replace(',', '').strip() if row[b_column_index] else 0),
@@ -986,14 +997,29 @@ def create_months_summary_sheet(spreadsheet, source_sheet):
         pass
 
     month_summary_sheet = spreadsheet.add_worksheet(title='MonthSummary', rows=str(len(month_data_aggregated) + 5), cols="20")
-
+    print(f'month_data_aggregated={month_data_aggregated}')
     # Prepare and insert the data into 'MonthSummary'
     headers = ["Month", "Totals", "FB_Total", "Google_Total", source_data[0][bau_brand_column_index]+'_Impressions']
     headers.append('Internal Leads')
     headers.append('Internal Leads CPL')
     data_to_insert = [headers]
 
-    for month_name, aggregated_data in sorted(month_data_aggregated.items()):
+    def parse_month_year(month_year_str):
+        try:
+            # Split the string into month and year
+            month_str, year_str = month_year_str.split(',')
+            # Convert month string to its corresponding integer value
+            month = datetime.strptime(month_str.strip(), '%B').month
+            # Convert year string to integer
+            year = int(year_str.strip())
+            return year, month
+        except ValueError:
+            # Handle unexpected format
+            return 0, 0
+
+    for month_name, aggregated_data in sorted(  month_data_aggregated.items(),
+                                                key=lambda x: parse_month_year(x[0])
+                                                ):
         data_to_insert.append([month_name] + aggregated_data)
 
     for _ in range(5):  # Add five empty rows after the last row of data for formatting
@@ -1068,6 +1094,7 @@ def normalize_data(spreadsheet, sheet, period='week'):
     add_summary_chart(normalized_sheet, period,"TOTAL", ['Totals', 'BAU | Brand_Impressions'], "I1", width=800, height=300)
     add_summary_chart(normalized_sheet, period,"Per BRAND ", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "H17", width=800, height=300)
     add_summary_chart(normalized_sheet, period,"Internal LEADS ", ['FB_Total', 'Google_Total','Internal Leads','Internal Leads CPL'], "A10", width=600, height=300)
+    add_summary_chart(normalized_sheet, period,"Internal LEADS ", ['Totals','Internal Leads','Internal Leads CPL'], "A20", width=600, height=300)
 
         # add_summary_chart(normalized_sheet, "Totals","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
     return df_normalized
