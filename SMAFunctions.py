@@ -7,7 +7,8 @@ import gspread
 from gspread.exceptions import WorksheetNotFound
 import pandas as pd
 from SMAGoogleAPICalls import (add_chart_to_sheet, add_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,
-                                add_borders_to_cells_only_allRows, add_up_down_borders_to_rows, color_rows_in_export, sortSheetByDateFromCol)
+                                add_borders_to_cells_only_allRows, add_up_down_borders_to_rows, color_rows_in_export, sortSheetByDateFromCol,
+                                group_rows)
 from SMA_Constants import (FB_CAMPAIGNS, GOOGLE_CAMPAIGNS, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL, INTERIM_SHEET_DATA)
 
 # Helper function to standardize date format, e.g., '2024-01-31'
@@ -570,8 +571,9 @@ def insert_week_and_month_totals(total_sheet):
     previous_week_number = None
     current_year = None
     dates_pairs = zip(dates, dates[1:] + [None]) # Ensure the last date handles end of data
+    start_group_row=3
 
-    for i, (date_str, next_date_str) in enumerate(dates_pairs, start=3):
+    for i, (date_str, next_date_str) in enumerate(dates_pairs, start=start_group_row):
         if date_str:  # Ensure the date string is not empty
             # Convert the string to a datetime object
             date_obj = datetime.strptime(date_str, '%A, %B %d, %Y')
@@ -602,6 +604,9 @@ def insert_week_and_month_totals(total_sheet):
                 # Insert a row for the current week number if it has changed
                 if (current_week_number != previous_week_number and previous_week_number is not None) or is_last_day_of_month:
                     total_sheet.insert_row(["Week - " + str(previous_week_number)+", "+str(year)], adjusted_row_index)
+                    group_rows(total_sheet, start_group_row,adjusted_row_index-1)
+                    print(f'group_rows .... start_group_row={start_group_row} adjusted_row_index={adjusted_row_index} ')
+                    start_group_row=adjusted_row_index+1
                     time.sleep(2)
                     # Insert the SUM formula for column B and replicate it across the row
                     colB_Week_Sum(adjusted_row_index,  total_sheet)

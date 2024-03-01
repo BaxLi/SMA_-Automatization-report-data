@@ -600,7 +600,32 @@ def sortSheetByDateFromCol(sheet, col='A', order = 'ASCENDING'):
     body=body
     ).execute()
 
+def group_rows(sheet, start_row, end_row):
+    # The request body for adding row groups
+    requests = [
+        {
+            "addDimensionGroup": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "dimension": "ROWS",
+                    "startIndex": start_row - 1,  # Adjust because the API uses zero-based indexing
+                    "endIndex": end_row  # The end index is exclusive
+                }
+            }
+        }
+    ]
 
+    # Execute the request
+    body = {
+        'requests': requests
+    }
+
+    response = service.spreadsheets().batchUpdate(
+        spreadsheetId=sheet.spreadsheet_id,
+        body=body
+    ).execute()
+
+    return response
 
 
 
