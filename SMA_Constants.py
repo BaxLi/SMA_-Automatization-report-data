@@ -2,7 +2,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from google.oauth2.service_account import Credentials
 
 SERVICE_ACCOUNT_FILE = 'sma-automatization-d95cdc6c39de.json'
-Google_workbook = '1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
+GOOGLE_WORKBOOK = '1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
 Google_doc_sheet_id = 231244777
 workbook_url= 'https://docs.google.com/spreadsheets/d/1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4/edit#gid=231244777'
 
@@ -38,3 +38,14 @@ commonExportedCampaignsSheet='campaign_exp_sheet'
 TOTAL_TOTAL_COL='B'
 FB_TOTAL_COL='H'
 GOOGLE_TOTAL_COL='BR'
+
+
+def column_index_to_string(col_index):
+    """Convert a column index into a column letter: 1 -> A, 2 -> B, etc."""
+    if col_index < 1:
+        raise ValueError("Index is too small")
+    result = ""
+    while col_index > 0:
+        col_index, remainder = divmod(col_index - 1, 26)
+        result = chr(65 + remainder) + result
+    return result

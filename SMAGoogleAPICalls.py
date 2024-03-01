@@ -2,11 +2,9 @@
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from SMAFunctions import (column_letter_to_index)
-from SMA_Constants import CREDENTIALS
+from SMA_Constants import CREDENTIALS,GOOGLE_WORKBOOK, TOTAL_TOTAL_COL, column_index_to_string
 
 SERVICE_ACCOUNT_FILE = 'sma-automatization-d95cdc6c39de.json'
-WB='1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
-Page_InterimFB=231244777
 credentials = Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, 
     scopes=['https://www.googleapis.com/auth/spreadsheets']
@@ -14,7 +12,8 @@ credentials = Credentials.from_service_account_file(
 # Build the service client
 service = build('sheets', 'v4', credentials=CREDENTIALS)
 
-def rangeDef(date_row,startColIdx, endColIndex=None,sheet_id=Page_InterimFB):
+def rangeDef(date_row,startColIdx, endColIndex=None, sheet_id=None):
+    # print(f'rangeDef sheet_id={sheet_id}')
     return {
                             "sheetId": sheet_id,  # Replace with your sheet ID
                             "startRowIndex": date_row - 1,  # Rows are zero indexed
@@ -39,17 +38,18 @@ def create_format_request(range_def, number_format_type, pattern):
         }
     }
 
-def total_summary_section_format(date_row, workbook_id=None, service=None, start_col=None):
-# Ensure service and WB (Workbook ID) are passed correctly
+def total_summary_section_format(date_row, workbook_id=GOOGLE_WORKBOOK, service=None, start_col=None, sheet_id=None):
+    print(f'total_summary_section_format -=-  date_row={date_row}   start_col={start_col} \n')
+# Ensure service and GOOGLE_WORKBOOK (Workbook ID) are passed correctly
     if service is None or workbook_id is None:
-        raise ValueError("All service and sheet_id and WB must be provided")
+        raise ValueError("All service and sheet_id and GOOGLE_WORKBOOK must be provided")
 
      # Calculate the starting index from the column letter
-    start_col_index = column_letter_to_index(start_col)-2 if start_col is not None else 0
-    tp="CURRENCY" if start_col is not None else "PERCENT"
-    tp_val='"€"#,##0.00' if start_col is not None else "0.00%"
-    tp_cpl="NUMBER" if start_col is not None else "CURRENCY"
-    tp_cpl_f='#0' if start_col is not None else '"€"#,##0.00'
+    start_col_index = column_letter_to_index(start_col)-2 if not start_col==TOTAL_TOTAL_COL else 0
+    tp="CURRENCY" if not start_col==TOTAL_TOTAL_COL else "PERCENT"
+    tp_val='"€"#,##0.00' if not start_col ==TOTAL_TOTAL_COL else "0.00%"
+    tp_cpl="NUMBER" if not start_col ==TOTAL_TOTAL_COL else "CURRENCY"
+    tp_cpl_f='#0' if not start_col ==TOTAL_TOTAL_COL else '"€"#,##0.00'
     # print(f'{start_col}+1=Index {start_col_index}')
 
     # Define column formats in a more maintainable structure
@@ -61,21 +61,22 @@ def total_summary_section_format(date_row, workbook_id=None, service=None, start
         (start_col_index+5, tp, tp_val),  # Total CPL  - OR - % of Facebook in common total
         (start_col_index+6, tp, tp_val),  # Total CPComments - OR - % of GOOGEL in common total
     ]
+    # print(f'column_formats={column_formats}\n')
     requests = [
-        create_format_request(rangeDef(date_row, col_idx), format_type, pattern)
+        create_format_request(rangeDef(date_row, col_idx,None, sheet_id), format_type, pattern)
         for col_idx, format_type, pattern in column_formats
     ]
     request_body = {"requests": requests}
     service.spreadsheets().batchUpdate(spreadsheetId=workbook_id, body=request_body).execute()
 
-def campaign_format_dates(date_row, workbook_id=None, service=None, start_col=None, nr_sets=None):
+def campaign_format_dates(date_row, workbook_id=None, service=None, start_col=None, nr_sets=None, sheet_id=None):
     if service is None or workbook_id is None:
         raise ValueError("Both service and my_spreadsheet must be provided")
 
     start_column = 14 if start_col is None else start_col
     step = 7
     number_of_sets = 8 if nr_sets is None else nr_sets
-    print(f'campaign_format_dates: start_column={start_column}')
+    print(f'campaign_format_dates: start_column={start_column} - {column_index_to_string(start_column)} sets={nr_sets} sheet_id={sheet_id}')
     column_formats = [
         ("CURRENCY", '"€"#,##0.00'),  # Ad Spend
         ("NUMBER", "#0"),             # Impressions
@@ -90,11 +91,13 @@ def campaign_format_dates(date_row, workbook_id=None, service=None, start_col=No
     for set_number in range(number_of_sets):
         column_offset = start_column + (set_number * step)
         for i, (format_type, pattern) in enumerate(column_formats):
-            cell_range = rangeDef(date_row, column_offset + i)
+            cell_range = rangeDef(date_row, column_offset + i, None, sheet_id)
             format_request = create_format_request(cell_range, format_type, pattern)
             requests.append(format_request)
 
     request_body = {"requests": requests}
+    # print('request_body')
+    # print(request_body)
     service.spreadsheets().batchUpdate(spreadsheetId=workbook_id, body=request_body).execute()
 
 def clear_sheet_formatting_and_content(a_sheet):
@@ -244,108 +247,10 @@ def add_up_down_borders_to_rows(worksheet, start_row_index, end_row_index, borde
     }
     service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
 
-def add_summary_chart_OLD(worksheet, startsLineWith, chart_title="SPEND x Leads x CPL - Weekly"):
-    print('EXECUTE - add_summary_chart')
-    last_data_row_index = worksheet.row_count 
-    print(f'last_data_row_index={last_data_row_index}')
-
-    column_a_values = worksheet.col_values(1)
-    print(f'column_a_values = {column_a_values}')
-    last_data_row_index = None
-
-    # Iterate in reverse to find the last occurrence
-    for index, value in reversed(list(enumerate(column_a_values))):
-        if value.startswith(startsLineWith):
-            last_data_row_index = index + 1  # +1 because enumerate starts at 0
-            break
-        if startsLineWith=='month':
-            last_data_row_index = index + 1  # +1 because enumerate starts at 0
-            break
-    print(f'2 - last_data_row_index={last_data_row_index}')
-
-    # Define the chart request body
-    requests = {
-        "requests": [
-            {
-                "addChart": {
-                    "chart": {
-                        "spec": {
-                            "title": chart_title,
-                            "basicChart": {
-                                "chartType": "LINE",
-                                "legendPosition": "BOTTOM_LEGEND",
-                                "axis": [
-                                    {
-                                        "position": "BOTTOM_AXIS",
-                                        "title": "Weeks"
-                                    },
-                                    {
-                                        "position": "LEFT_AXIS",
-                                        "title": "Values"
-                                    }
-                                ],
-                                "domains": [
-                                    {
-                                        "domain": {
-                                            "sourceRange": {
-                                                "sources": [
-                                                    {
-                                                        "sheetId": worksheet.id,
-                                                        "startRowIndex": 0,  # Assuming header is in the first row
-                                                        "endRowIndex": last_data_row_index,
-                                                        "startColumnIndex": 0,  # Weeks column
-                                                        "endColumnIndex": 1
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    }
-                                ],
-                                "series": [
-                                    {
-                                        "series": {
-                                            "sourceRange": {
-                                                "sources": [
-                                                    {
-                                                        "sheetId": worksheet.id,
-                                                        "startRowIndex": 0,  # Assuming header is in the first row
-                                                        "endRowIndex": last_data_row_index,
-                                                        "startColumnIndex": i,
-                                                        "endColumnIndex": i + 1
-                                                    }
-                                                ]
-                                            }
-                                        },
-                                        "targetAxis": "LEFT_AXIS"
-                                    } for i in range(1, 6)  # Assuming you have  columns of data
-                                ],
-                                "headerCount": 1
-                            }
-                        },
-                        "position": {
-                            "overlayPosition": {
-                                "anchorCell": {
-                                    "sheetId": worksheet.id,
-                                    "rowIndex": last_data_row_index+2,  # Positioning the chart after the last row of data and empty rows
-                                    "columnIndex": 10  # Starting from the first column
-                                },
-                                "offsetXPixels": 0,  # Adjust as needed
-                                "offsetYPixels": 0   # Adjust as needed
-                            }
-                        }
-                    }
-                }
-            }
-        ]
-    }
-
-    # Send the request to the API
-    response = service.spreadsheets().batchUpdate(spreadsheetId=worksheet.spreadsheet_id, body=requests).execute()
-
 def add_summary_chart(worksheet, startsLineWith, chart_title, columns_to_chart, start_cell="G15", width=600, height=200):
     print('EXECUTE - add_summary_chart')
     last_data_row_index = worksheet.row_count 
-    print(f'last_data_row_index={last_data_row_index}')
+    # print(f'last_data_row_index={last_data_row_index}')
 
     column_a_values = worksheet.col_values(1)
     # print(f'column_a_values = {column_a_values}')
@@ -360,7 +265,7 @@ def add_summary_chart(worksheet, startsLineWith, chart_title, columns_to_chart, 
             last_data_row_index = len(column_a_values)  # +1 because enumerate starts at 0
             break
 
-    print(f'2 - last_data_row_index={last_data_row_index}')
+    # print(f'2 - last_data_row_index={last_data_row_index}')
 
     # Get the index of the columns to chart from the header
     header = worksheet.row_values(1)
@@ -627,6 +532,35 @@ def group_rows(sheet, start_row, end_row):
 
     return response
 
+
+
+def column_width(sheet, start_col, end_col, desired_width=150):
+    request = {
+        "updateDimensionProperties": {
+            "range": {
+                "sheetId": sheet.id,
+                "dimension": "COLUMNS",
+                "startIndex": column_letter_to_index(start_col)-1,  # Column A
+                "endIndex": column_letter_to_index(end_col)-1     # Column B (exclusive)
+            },
+            "properties": {
+                "pixelSize": desired_width
+            },
+            "fields": "pixelSize"
+        }
+    }
+
+    # Execute the request
+    body = {
+        'requests': request
+    }
+
+    response = service.spreadsheets().batchUpdate(
+        spreadsheetId=sheet.spreadsheet_id,
+        body=body
+    ).execute()
+
+    return response
 
 
 
