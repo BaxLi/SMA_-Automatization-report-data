@@ -46,7 +46,7 @@ def fillInterimCampaignsDataColumn(interim, toexport):
     # Generate all dates from earliest to latest
     dt=[earliest_date + timedelta(days=i) for i in range((latest_date - earliest_date).days + 1)]
     all_dates = reversed(dt)
-    print(f'alldates={dt}')
+    # print(f'alldates={dt}')
 
     # Determine the number of rows to add if there aren't enough
     rows_to_add = len(dt) - interim.row_count + INTERIM_SHEET_DATA - 1  # Subtract the number of existing rows and adjust for the header

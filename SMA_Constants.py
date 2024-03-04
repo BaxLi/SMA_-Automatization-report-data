@@ -1,20 +1,18 @@
-from oauth2client.service_account import ServiceAccountCredentials
 from google.oauth2.service_account import Credentials
 
-SERVICE_ACCOUNT_FILE = 'sma-automatization-d95cdc6c39de.json'
-GOOGLE_WORKBOOK = '1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
-Google_doc_sheet_id = 231244777
-workbook_url= 'https://docs.google.com/spreadsheets/d/1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4/edit#gid=231244777'
+SERVICE_ACCOUNT_FILE_TEST = 'sma-automatization-d95cdc6c39de.json'
+SERVICE_ACCOUNT_FILE_PROD = 'sma-marketing.json'
+GOOGLE_WORKBOOK_TEST = '1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
+GOOGLE_WORKBOOK = '1NEAGIiwY6rBirO0YWzP8Eq0f41BdxLiazuRYBVzxHyU'
+workbook_url_TEST= 'https://docs.google.com/spreadsheets/d/1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4/edit#gid=231244777'
+workbook_url= 'https://docs.google.com/spreadsheets/d/1NEAGIiwY6rBirO0YWzP8Eq0f41BdxLiazuRYBVzxHyU/edit#gid=443982442'
 
-# Use the JSON key file you downloaded to set up the credentials
-scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
-         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(
-    'sma-automatization-d95cdc6c39de.json', scope)
+# Define the scope
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 CREDENTIALS = Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE,
-    scopes=['https://www.googleapis.com/auth/spreadsheets']
+    SERVICE_ACCOUNT_FILE_PROD,
+    scopes=SCOPES
 )
 
 FB_CAMPAIGNS = [

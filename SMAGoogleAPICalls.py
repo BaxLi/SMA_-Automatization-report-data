@@ -2,15 +2,12 @@
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from SMAFunctions import (column_letter_to_index)
-from SMA_Constants import CREDENTIALS,GOOGLE_WORKBOOK, TOTAL_TOTAL_COL, column_index_to_string
+from SMA_Constants import (CREDENTIALS, GOOGLE_WORKBOOK, TOTAL_TOTAL_COL, column_index_to_string, 
+                            SERVICE_ACCOUNT_FILE_PROD,  SERVICE_ACCOUNT_FILE_TEST)
 
-SERVICE_ACCOUNT_FILE = 'sma-automatization-d95cdc6c39de.json'
-credentials = Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, 
-    scopes=['https://www.googleapis.com/auth/spreadsheets']
-)
 # Build the service client
 service = build('sheets', 'v4', credentials=CREDENTIALS)
+# from SMA1 import service
 
 def rangeDef(date_row,startColIdx, endColIndex=None, sheet_id=None):
     # print(f'rangeDef sheet_id={sheet_id}')
@@ -531,8 +528,6 @@ def group_rows(sheet, start_row, end_row):
     ).execute()
 
     return response
-
-
 
 def column_width(sheet, start_col, end_col, desired_width=150):
     request = {
