@@ -2,8 +2,7 @@
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from SMAFunctions import (column_letter_to_index)
-from SMA_Constants import (CREDENTIALS, GOOGLE_WORKBOOK, TOTAL_TOTAL_COL, column_index_to_string, 
-                            SERVICE_ACCOUNT_FILE_PROD,  SERVICE_ACCOUNT_FILE_TEST)
+from SMA_Constants import (CREDENTIALS, GOOGLE_WORKBOOK, TOTAL_TOTAL_COL, column_index_to_string)
 
 # Build the service client
 service = build('sheets', 'v4', credentials=CREDENTIALS)
