@@ -1,14 +1,8 @@
 from google.oauth2.service_account import Credentials
 
-SERVICE_ACCOUNT_FILE_TEST = 'sma-automatization-d95cdc6c39de.json'
 SERVICE_ACCOUNT_FILE_PROD = 'sma-marketing.json'
-# -------- TEST WORKBOOK -------------
-GOOGLE_WORKBOOK = '1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4'
-workbook_url= 'https://docs.google.com/spreadsheets/d/1XYa7prf5npKZw5OKmGzizXsUPhbL84o0vLxGKZab1c4/edit#gid=231244777'
-
-#  ___________________________ Production  ____________________________
-# workbook_url= 'https://docs.google.com/spreadsheets/d/1NEAGIiwY6rBirO0YWzP8Eq0f41BdxLiazuRYBVzxHyU/edit#gid=443982442'
-# GOOGLE_WORKBOOK = '1NEAGIiwY6rBirO0YWzP8Eq0f41BdxLiazuRYBVzxHyU'
+GOOGLE_WORKBOOK = '1qQFyHYEzebnI3oLNEmLgG5izUXFdzTV9ijhphLCxmWY'
+workbook_url= 'https://docs.google.com/spreadsheets/d/1qQFyHYEzebnI3oLNEmLgG5izUXFdzTV9ijhphLCxmWY/edit#gid=741057592'
 
 # Define the scope
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -28,13 +22,8 @@ FB_CAMPAIGNS = [
     "BAU | Page Likes",
     "nBAU | FB"
 ]
-# Google campaigns have to be mapped to 
-# 1. BAU | Brand 
-# 2. ⁠BAU | Search 
-# 3. ⁠BAU | PMAX 
-# 4. ⁠nBAU Google 
 GOOGLE_CAMPAIGNS = [
-    "Brand Protect | MCPC", "Denti Fissi | MCPC -19.12", "Main KW | MCPC - 19.12", "PMAX | MCONV"
+    "Brand Protect | MCPC","Denti Fissi | MCPC -19.12", "Main KW | MCPC - 19.12", "nBAU | Google"
 ]
 
 interim_campaigns_sheet_name='InterimCampaigns'

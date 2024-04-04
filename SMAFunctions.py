@@ -197,9 +197,15 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
         for old, new in replacements[sheet].items():
             if old in df.columns:
                 df.rename(columns={old: new}, inplace=True)
+    
+    # Ensure 'Total Leads' and 'Post comments' columns exist in data_google
+    for column in ['Total Leads', 'Post comments']:
+        if column not in data_google.columns:
+            data_google[column] = 0  # Or pd.NA for missing values
 
     data = pd.concat([data_fb, data_google], ignore_index=True)
     print(f'concatenated data={data.shape}')
+    # print(data)
     # Convert numerical columns to float and fill missing values
     data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']] = data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']].apply(pd.to_numeric, errors='coerce').fillna(0)
 
@@ -216,6 +222,10 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     data['Determined Campaign'] = data['AdSet name'].apply(determine_campaign)
     # Now, replace all instances of 'Brand Protect | MCPC' with 'BAU | Brand' in the 'Determined Campaign' column
     data['Determined Campaign'] = data['Determined Campaign'].replace('Brand Protect | MCPC', 'BAU | Brand')
+    data['Determined Campaign'] = data['Determined Campaign'].replace('PMAX | MCONV', 'BAU | PMAX')
+    data['Determined Campaign'] = data['Determined Campaign'].replace('nBau Google | MCPC', 'nBAU Google')
+    data['Determined Campaign'] = data['Determined Campaign'].replace('Denti Fissi | MCPC -19.12', 'BAU | Search')
+    data['Determined Campaign'] = data['Determined Campaign'].replace('Main KW | MCPC - 19.12', 'BAU | Search')
 
     # Aggregate data
     grouped = data.groupby(['Date', 'Determined Campaign']).sum().reset_index()

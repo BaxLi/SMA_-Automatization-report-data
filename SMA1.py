@@ -14,6 +14,9 @@ from SMAGoogleAPICalls import total_summary_section_format, campaign_format_date
 from SMA_Constants import (CREDENTIALS, workbook_url, interim_campaigns_sheet_name, commonExportedCampaignsSheet, 
                            FB_TOTAL_COL, GOOGLE_TOTAL_COL, GOOGLE_WORKBOOK, GOOGLE_CAMPAIGNS, FB_CAMPAIGNS,TOTAL_CAMPAIGNS_SHEET_NAME,
                            INTERIM_SHEET_DATA, TOTAL_TOTAL_COL, column_index_to_string)
+# from SMA_Constants_dentalexcellence import (CREDENTIALS, workbook_url, interim_campaigns_sheet_name, commonExportedCampaignsSheet, 
+#                            FB_TOTAL_COL, GOOGLE_TOTAL_COL, GOOGLE_WORKBOOK, GOOGLE_CAMPAIGNS, FB_CAMPAIGNS,TOTAL_CAMPAIGNS_SHEET_NAME,
+#                            INTERIM_SHEET_DATA, TOTAL_TOTAL_COL, column_index_to_string)
 
 # Suppress only DeprecationWarnings
 warnings.filterwarnings('always')
@@ -75,6 +78,7 @@ for date_row in range(3, len(column_b_values)+INTERIM_SHEET_DATA):
     campaign_format_dates(date_row, GOOGLE_WORKBOOK, service, column_letter_to_index(FB_TOTAL_COL)+5,len(FB_CAMPAIGNS), interim_campaigns_sheet.id)
     time.sleep(1)
     campaign_format_dates(date_row, GOOGLE_WORKBOOK, service, column_letter_to_index(GOOGLE_TOTAL_COL)+5, len(GOOGLE_CAMPAIGNS), interim_campaigns_sheet.id)
+    # pauseMe('!!!!!!!!!!! CHEK phase - SMA1 - STEP-2-3 \n') 
 
 pauseMe('SMA1 - STEP-3 \n')
 interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)

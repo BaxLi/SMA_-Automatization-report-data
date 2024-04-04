@@ -80,7 +80,7 @@ def campaign_format_dates(date_row, workbook_id=None, service=None, start_col=No
         ("NUMBER", "#0"),             # Total Comments
         ("CURRENCY", '"€"#,##0.00'),  # Total CPL
         ("CURRENCY", '"€"#,##0.00'),  # Total CPComments
-        ("PERCENT", "0.00%"),         # Percentage of Spend
+        ("PERCENT", "#,##0.00%"),         # Percentage of Spend
     ]
 
     requests = []
