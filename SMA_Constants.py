@@ -28,14 +28,7 @@ FB_CAMPAIGNS = [
     "BAU | Page Likes",
     "nBAU | FB"
 ]
-# Google campaigns have to be mapped to 
-# 1. BAU | Brand 
-# 2. ⁠BAU | Search 
-# 3. ⁠BAU | PMAX 
-# 4. ⁠nBAU Google 
-GOOGLE_CAMPAIGNS = [
-    "Brand Protect | MCPC", "Denti Fissi | MCPC -19.12", "Main KW | MCPC - 19.12", "PMAX | MCONV"
-]
+GOOGLE_CAMPAIGNS = [ "BAU | Brand", "BAU | Search", "BAU | PMAX", "nBAU Google"]
 
 interim_campaigns_sheet_name='InterimCampaigns'
 TOTAL_CAMPAIGNS_SHEET_NAME='Total Summary'
@@ -44,6 +37,10 @@ commonExportedCampaignsSheet='campaign_exp_sheet'
 TOTAL_TOTAL_COL='B'
 FB_TOTAL_COL='H'
 GOOGLE_TOTAL_COL='BR'
+
+#Campaign Export step - column names
+CAMPAIGN_AMOUNT_SPEND_FB="Amount Spent"
+CAMPAIGN_LEADS_FB="Leads (all)"
 
 
 def column_index_to_string(col_index):

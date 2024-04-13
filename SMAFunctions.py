@@ -9,7 +9,8 @@ import pandas as pd
 from SMAGoogleAPICalls import (add_chart_to_sheet, add_summary_chart, clear_sheet_formatting_and_content, add_left_right_borders_to_columns,
                                 add_borders_to_cells_only_allRows, add_up_down_borders_to_rows, color_rows_in_export, sortSheetByDateFromCol,
                                 group_rows, column_width)
-from SMA_Constants import (FB_CAMPAIGNS, GOOGLE_CAMPAIGNS, commonExportedCampaignsSheet, TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL,
+from SMA_Constants import (FB_CAMPAIGNS, GOOGLE_CAMPAIGNS, commonExportedCampaignsSheet, 
+                           TOTAL_TOTAL_COL,FB_TOTAL_COL,GOOGLE_TOTAL_COL,CAMPAIGN_AMOUNT_SPEND_FB,CAMPAIGN_LEADS_FB,
                            INTERIM_SHEET_DATA, column_index_to_string)
 
 # Helper function to standardize date format, e.g., '2024-01-31'
@@ -100,8 +101,10 @@ def step1_commonCampaignSheetCreate(spreadsheet):
     print(f'LINE 36 !')
 
     # Prepare a dictionary of terms to replace
-    replacements_FB = {'Amount spent': 'Ad Spend', 'Contacts (website)': 'Total Leads'}
-    replacements_GOOGLE = {'Campaign name': 'AdSet name', 'Amount spent': 'Ad Spend'}
+    replacements_FB = {'Amount spent': CAMPAIGN_AMOUNT_SPEND_FB, 'Contacts (website)': CAMPAIGN_LEADS_FB}
+    replacements_GOOGLE = {'Campaign name': 'AdSet name', 
+                        #    'Amount spent': CAMPAIGN_AMOUNT_SPEND_FB
+                           }
 
     # Update headers if necessary
     update_sheet_headers(FB_data_exp_sheet, replacements_FB)
@@ -114,7 +117,7 @@ def step1_commonCampaignSheetCreate(spreadsheet):
     data=pd.concat([data_fb, data_google], ignore_index=True)
 
     # Convert numerical columns to float and fill missing values
-    numeric_columns = ['Ad Spend', 'Total Leads',
+    numeric_columns = [CAMPAIGN_AMOUNT_SPEND_FB, CAMPAIGN_LEADS_FB,
                     'Post comments', 'Impressions']
     for column in numeric_columns:
         data[column] = pd.to_numeric(data[column], errors='coerce').fillna(0)
@@ -136,8 +139,8 @@ def step1_commonCampaignSheetCreate(spreadsheet):
 
     # Group and aggregate data by Date and the determined campaign
     grouped = data.groupby(['Date', 'Determined Campaign']).agg({
-        'Ad Spend': 'sum',
-        'Total Leads': 'sum',
+        CAMPAIGN_AMOUNT_SPEND_FB: 'sum',
+        CAMPAIGN_LEADS_FB: 'sum',
         'Post comments': 'sum',
         'Impressions': 'sum'
     }).reset_index()
@@ -188,8 +191,9 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
 
     # Define replacements in a more streamlined way
     replacements = {
-        'Facebook Export Data': {'Amount spent': 'Ad Spend', 'Contacts (website)': 'Total Leads'},
-        'Google Export Data': { 'Campaign name': 'AdSet name','Amount spent': 'Ad Spend'}
+        # 'Facebook Export Data': {'Amount spent': CAMPAIGN_AMOUNT_SPEND_FB, 'Contacts (website)': CAMPAIGN_LEADS_FB},
+        'Facebook Export Data': {'BAU | DC Type': 'AdSet name','Amount spent': CAMPAIGN_AMOUNT_SPEND_FB, 'Leads (all)': CAMPAIGN_LEADS_FB},
+        'Google Export Data': { 'Campaign name': 'AdSet name','Amount spent': CAMPAIGN_AMOUNT_SPEND_FB}
     }
 
     # Apply replacements and concat data
@@ -198,39 +202,55 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
             if old in df.columns:
                 df.rename(columns={old: new}, inplace=True)
     
-    # Ensure 'Total Leads' and 'Post comments' columns exist in data_google
-    for column in ['Total Leads', 'Post comments']:
+    # Ensure CAMPAIGN_LEADS_FB and 'Post comments' columns exist in data_google
+    for column in [CAMPAIGN_LEADS_FB, 'Post comments']:
         if column not in data_google.columns:
             data_google[column] = 0  # Or pd.NA for missing values
 
     data = pd.concat([data_fb, data_google], ignore_index=True)
     print(f'concatenated data={data.shape}')
-    # print(data)
+
     # Convert numerical columns to float and fill missing values
-    data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']] = data[['Ad Spend', 'Total Leads', 'Post comments', 'Impressions']].apply(pd.to_numeric, errors='coerce').fillna(0)
+    data[[CAMPAIGN_AMOUNT_SPEND_FB, CAMPAIGN_LEADS_FB, 'Post comments', 'Impressions']] = data[[CAMPAIGN_AMOUNT_SPEND_FB, CAMPAIGN_LEADS_FB, 'Post comments', 'Impressions']].apply(pd.to_numeric, errors='coerce').fillna(0)
 
     # Simplify the determine_campaign function and apply it
     campaigns = {'fb_campaigns': FB_CAMPAIGNS, 'google_campaigns': GOOGLE_CAMPAIGNS}  # Assuming fb_campaigns and google_campaigns are defined elsewhere
 
     def determine_campaign(adset_name):
-        for source, campaign_list in campaigns.items():
-            for campaign in campaign_list:
+        """
+        Returns the first campaign that is a substring of adset_name, or 'Other' if no match is found.
+
+        Args:
+        adset_name (str): The name of the ad set to check.
+        campaigns (dict): A dictionary of campaign lists keyed by campaign type.
+
+        Returns:
+        str: The matching campaign name or 'Other'.
+        """
+        # print(f'AdsetName ={adset_name}')
+        if not isinstance(adset_name, str):
+            return 'Other'  # Return 'Other' if adset_name is not a string (e.g., NaN or None)
+        for campaign_type in campaigns.values():
+            for campaign in campaign_type:
                 if campaign in adset_name:
                     return campaign
         return 'Other'
+    # print(data)
 
     data['Determined Campaign'] = data['AdSet name'].apply(determine_campaign)
     # Now, replace all instances of 'Brand Protect | MCPC' with 'BAU | Brand' in the 'Determined Campaign' column
-    data['Determined Campaign'] = data['Determined Campaign'].replace('Brand Protect | MCPC', 'BAU | Brand')
-    data['Determined Campaign'] = data['Determined Campaign'].replace('PMAX | MCONV', 'BAU | PMAX')
-    data['Determined Campaign'] = data['Determined Campaign'].replace('nBau Google | MCPC', 'nBAU Google')
-    data['Determined Campaign'] = data['Determined Campaign'].replace('Denti Fissi | MCPC -19.12', 'BAU | Search')
-    data['Determined Campaign'] = data['Determined Campaign'].replace('Main KW | MCPC - 19.12', 'BAU | Search')
+    # data['Determined Campaign'] = data['Determined Campaign'].replace('Brand Protect | MCPC', 'BAU | Brand')
+    # data['Determined Campaign'] = data['Determined Campaign'].replace('PMAX | MCONV', 'BAU | PMAX')
+    # data['Determined Campaign'] = data['Determined Campaign'].replace('nBau Google | MCPC', 'nBAU Google')
+    # data['Determined Campaign'] = data['Determined Campaign'].replace('Denti Fissi | MCPC -19.12', 'BAU | Search')
+    # data['Determined Campaign'] = data['Determined Campaign'].replace('Main KW | MCPC - 19.12', 'BAU | Search')
 
     # Aggregate data
     grouped = data.groupby(['Date', 'Determined Campaign']).sum().reset_index()
     grouped = grouped.drop(columns=['AdSet name'])
 
+    print(data)
+    
     # Write to 'campaign_exp_sheet'
     sheet_title = commonExportedCampaignsSheet
     try:
@@ -282,12 +302,12 @@ def step2_iterateExport_OLD(campaign_exp_sheet, interim_campaigns_sheet):
             raise ValueError(f"LINE 160 Campaign not found in INTERIM sheet {determined_campaign}.")
 
         # Prepare the update payload for each metric
-        ad_spend = row['Ad Spend']
+        ad_spend = row[CAMPAIGN_AMOUNT_SPEND_FB]
         impressions = row['Impressions'] if row['Impressions'] else 0
-        leads = row['Total Leads'] if row['Total Leads'] else 0
+        leads = row[CAMPAIGN_LEADS_FB] if row[CAMPAIGN_LEADS_FB] else 0
         comments = row['Post comments'] if row['Post comments'] else 0
 
-        # Find the column index for this campaign's "Ad Spend"
+        # Find the column index for this campaign's "CAMPAIGN_AMOUNT_SPEND_FB"
         print(f'determined_campaign={header_row.index(determined_campaign)}\n')
         start_column_index=header_row.index(determined_campaign)+1 
         adspend_cell = gspread.utils.rowcol_to_a1(date_row_number,start_column_index)  # 1-based indexing
@@ -356,9 +376,9 @@ def step2_iterateExport(campaign_exp_sheet, interim_campaigns_sheet):
         update_range_end = gspread.utils.rowcol_to_a1(date_row_number, start_column_index + 6)
 
         update_values = [
-            row['Ad Spend'],
+            row[CAMPAIGN_AMOUNT_SPEND_FB],
             row['Impressions'] if row['Impressions'] else 0,
-            row['Total Leads'] if row['Total Leads'] else 0,
+            row[CAMPAIGN_LEADS_FB] if row[CAMPAIGN_LEADS_FB] else 0,
             row['Post comments'] if row['Post comments'] else 0,
             f"=IFERROR({update_range_start}/{gspread.utils.rowcol_to_a1(date_row_number, start_column_index + 2)},0)",  # total_cpl_formula
             f"=IFERROR({update_range_start}/{gspread.utils.rowcol_to_a1(date_row_number, start_column_index + 3)},0)",  # cp_comments_formula
@@ -735,14 +755,18 @@ def restructure_to_weekly(interim_campaigns_sheet,spreadsheet, sheet_name):
     time.sleep(1)
     new_worksheet = spreadsheet.worksheet(sheet_name)
     internal_leads_sheet=spreadsheet.worksheet('Internal Leads')
+    print(' 1 -- add_internal_leads')
     add_internal_leads(new_worksheet,internal_leads_sheet)
     new_worksheet = spreadsheet.worksheet(sheet_name)
     format_dates_in_column_a(new_worksheet)
     time.sleep(2)
+    print('2 ---- add_borders_to_cells_only_allRows')
     add_borders_to_cells_only_allRows(new_worksheet, 1,new_worksheet.col_count)
     time.sleep(2)
+    print(' 3 ------ insert_week_and_month_totals')
     insert_week_and_month_totals(new_worksheet)
     time.sleep(2)
+    print(' 4 ---------- merge_non_empty_columns_in_first_row')
     merge_non_empty_columns_in_first_row(new_worksheet)   
     format_row_as_lightgrey_and_bold(new_worksheet, 1, 0.0,0.9,1.0)
     new_worksheet.freeze(rows=2)
@@ -758,7 +782,7 @@ def add_internal_leads(total_campaigns_sheet, internal_leads_sheet):
     except ValueError as e:
         raise ValueError("The 'Total CPL' column was not found in the second row. Please check the sheet to ensure this column exists.") from e
     
-    # Fetch the values of 'Total Leads' and 'Total CPL' columns
+    # Fetch the values of CAMPAIGN_LEADS_FB and 'Total CPL' columns
     total_leads_values = total_campaigns_sheet.col_values(total_cpl_col_idx-1, value_render_option='FORMULA')
     total_cpl_values = total_campaigns_sheet.col_values(total_cpl_col_idx, value_render_option='FORMULA')
     
@@ -769,7 +793,7 @@ def add_internal_leads(total_campaigns_sheet, internal_leads_sheet):
     internal_leads_col_idx=total_cpl_col_idx+1
     internal_leads_cpl_col_idx=internal_leads_col_idx+1
 
-    # Update the values in the newly inserted 'Internal Leads' column with the values from 'Total Leads'
+    # Update the values in the newly inserted 'Internal Leads' column with the values from CAMPAIGN_LEADS_FB
     internal_leads_range = f'{gspread.utils.rowcol_to_a1(1, internal_leads_col_idx)}:{gspread.utils.rowcol_to_a1(len(total_leads_values) + 2, internal_leads_col_idx)}'
     total_campaigns_sheet.update(range_name=internal_leads_range, values=[[value] for value in total_leads_values], value_input_option='USER_ENTERED')
 
@@ -849,10 +873,15 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
     # Get all the data from the source sheet
     source_data = source_sheet.get_all_values()
     headers = source_data[0]  # Assuming row 1 contains headers
+    print('Headers line 0 =\n')
+    print(headers)
     headers1 = source_data[1]  # Assuming row 1 contains headers
     # Identify columns to copy
     b_column_index = 1  # Column 'B' is at index 1
+    # Refactor 
     bau_brand_column_index = headers.index('BAU | Brand')
+    print(f'bau_brand_column_index={bau_brand_column_index}')
+
     fb_total_col_index = headers.index('TOTAL Summary FB') 
     google_total_col_index = headers.index('TOTAL Summary Google')
     internal_leads_col_index = headers1.index('Internal Leads')
@@ -869,6 +898,13 @@ def create_weeks_summary_sheet(spreadsheet, source_sheet):
     for row in source_data:
         if row[0].startswith('Week'):
             week_number = row[0].split('-')[1].strip()  # Extract the week number
+            sss=row[b_column_index]
+            containsVal='#REF!' in sss
+            print(f"week_number={week_number} - {containsVal}")
+            if containsVal:
+                # row[b_column_index:]=[0] * (len(row) - b_column_index)
+                continue
+            
             # Extract and convert values for each required column
             values = [
                 float(row[b_column_index].replace('€', '').replace(',', '').strip() if row[b_column_index] else 0),
@@ -1064,10 +1100,10 @@ def normalize_data(spreadsheet, sheet, period='week'):
 
  # Update the sheet with normalized data
     normalized_sheet.update(values=normalized_data, range_name='A1', value_input_option='USER_ENTERED') #started range = A1 !
-    add_summary_chart(normalized_sheet, period,"Total Ad Spend vs Brand Impressions", ['Totals', 'BAU | Brand_Impressions'], "I1", width=800, height=300)
-    add_summary_chart(normalized_sheet, period,"Ad Spend by platform vs Brand Impressions", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "H17", width=800, height=300)
-    add_summary_chart(normalized_sheet, period,"Ad Spend by platform vs CPL vs Leads Volume", ['FB_Total', 'Google_Total','Internal Leads','Internal Leads CPL'], "A10", width=600, height=300)
-    add_summary_chart(normalized_sheet, period,"Total Ad Spend vs CPL vs Leads Volume ", ['Totals','Internal Leads','Internal Leads CPL'], "A20", width=600, height=300)
+    add_summary_chart(normalized_sheet, period,"Total CAMPAIGN_AMOUNT_SPEND_FB vs Brand Impressions", ['Totals', 'BAU | Brand_Impressions'], "I1", width=800, height=300)
+    add_summary_chart(normalized_sheet, period,"CAMPAIGN_AMOUNT_SPEND_FB by platform vs Brand Impressions", ['FB_Total', 'Google_Total','BAU | Brand_Impressions'], "H17", width=800, height=300)
+    add_summary_chart(normalized_sheet, period,"CAMPAIGN_AMOUNT_SPEND_FB by platform vs CPL vs Leads Volume", ['FB_Total', 'Google_Total','Internal Leads','Internal Leads CPL'], "A10", width=600, height=300)
+    add_summary_chart(normalized_sheet, period,"Total CAMPAIGN_AMOUNT_SPEND_FB vs CPL vs Leads Volume ", ['Totals','Internal Leads','Internal Leads CPL'], "A20", width=600, height=300)
 
         # add_summary_chart(normalized_sheet, "Totals","Per BRAND ", ['FB_Total', 'Google_total','BAU | Brand_Impressions'], "F11")
     return df_normalized
