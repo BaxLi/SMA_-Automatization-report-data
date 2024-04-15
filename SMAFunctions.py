@@ -238,12 +238,13 @@ def step1_v2_commonCampaignSheetCreate(spreadsheet):
     # print(data)
 
     data['Determined Campaign'] = data['AdSet name'].apply(determine_campaign)
-    # Now, replace all instances of 'Brand Protect | MCPC' with 'BAU | Brand' in the 'Determined Campaign' column
-    # data['Determined Campaign'] = data['Determined Campaign'].replace('Brand Protect | MCPC', 'BAU | Brand')
-    # data['Determined Campaign'] = data['Determined Campaign'].replace('PMAX | MCONV', 'BAU | PMAX')
-    # data['Determined Campaign'] = data['Determined Campaign'].replace('nBau Google | MCPC', 'nBAU Google')
-    # data['Determined Campaign'] = data['Determined Campaign'].replace('Denti Fissi | MCPC -19.12', 'BAU | Search')
-    # data['Determined Campaign'] = data['Determined Campaign'].replace('Main KW | MCPC - 19.12', 'BAU | Search')
+
+    # First, make sure that 'Leads (all)' and 'Conversions' columns are numeric.
+    data['Leads (all)'] = pd.to_numeric(data['Leads (all)'], errors='coerce').fillna(0)
+    data['Conversions'] = pd.to_numeric(data['Conversions'], errors='coerce').fillna(0)
+    #Conversion GOOGLE is a Lead FB 
+    # Now, add the 'Conversions' to 'Leads (all)'
+    data['Leads (all)'] += data['Conversions']
 
     # Aggregate data
     grouped = data.groupby(['Date', 'Determined Campaign']).sum().reset_index()

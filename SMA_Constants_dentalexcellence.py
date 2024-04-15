@@ -22,17 +22,21 @@ FB_CAMPAIGNS = [
     "BAU | Page Likes",
     "nBAU | FB"
 ]
-GOOGLE_CAMPAIGNS = [
-    "Brand Protect | MCPC","Denti Fissi | MCPC -19.12", "Main KW | MCPC - 19.12", "nBAU | Google"
-]
+GOOGLE_CAMPAIGNS = [ "BAU | Brand", "BAU | Search", "BAU | PMAX", "nBAU Google"]
+
+#Campaign Export step - column names
+CAMPAIGN_AMOUNT_SPEND_FB="Amount Spent"
+CAMPAIGN_LEADS_FB="Leads (all)"
 
 interim_campaigns_sheet_name='InterimCampaigns'
 TOTAL_CAMPAIGNS_SHEET_NAME='Total Summary'
 INTERIM_SHEET_DATA=2
+
 commonExportedCampaignsSheet='campaign_exp_sheet'
 TOTAL_TOTAL_COL='B'
 FB_TOTAL_COL='H'
 GOOGLE_TOTAL_COL='BR'
+
 
 
 def column_index_to_string(col_index):
