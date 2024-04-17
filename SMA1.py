@@ -14,9 +14,9 @@ from SMAGoogleAPICalls import total_summary_section_format, campaign_format_date
 from SMA_Constants import (CREDENTIALS, workbook_url, interim_campaigns_sheet_name, commonExportedCampaignsSheet, 
                            FB_TOTAL_COL, GOOGLE_TOTAL_COL, GOOGLE_WORKBOOK, GOOGLE_CAMPAIGNS, FB_CAMPAIGNS,TOTAL_CAMPAIGNS_SHEET_NAME,
                            INTERIM_SHEET_DATA, TOTAL_TOTAL_COL, column_index_to_string)
-# from SMA_Constants_dentalexcellence import (CREDENTIALS, workbook_url, interim_campaigns_sheet_name, commonExportedCampaignsSheet, 
-#                            FB_TOTAL_COL, GOOGLE_TOTAL_COL, GOOGLE_WORKBOOK, GOOGLE_CAMPAIGNS, FB_CAMPAIGNS,TOTAL_CAMPAIGNS_SHEET_NAME,
-#                            INTERIM_SHEET_DATA, TOTAL_TOTAL_COL, column_index_to_string)
+from SMA_Constants_dentalexcellence import (CREDENTIALS, workbook_url, interim_campaigns_sheet_name, commonExportedCampaignsSheet, 
+                           FB_TOTAL_COL, GOOGLE_TOTAL_COL, GOOGLE_WORKBOOK, GOOGLE_CAMPAIGNS, FB_CAMPAIGNS,TOTAL_CAMPAIGNS_SHEET_NAME,
+                           INTERIM_SHEET_DATA, TOTAL_TOTAL_COL, column_index_to_string)
 
 # Suppress only DeprecationWarnings
 warnings.filterwarnings('always')
@@ -33,13 +33,13 @@ print(f'LINE 22 - after open Google spreadsheet !')
 # # ------------------ STEP-1 - Collect data into campaign_exp_sheet -------------------------------
 
 step1_v2_commonCampaignSheetCreate(spreadsheet)
-pauseMe('SMA1 - STEP-1 \n')
+# pauseMe('SMA1 - STEP-1 \n')
 
 # # # # ---------------- STEP-2  Manipulate InterimCampaigns sheet---------------------------------
 
 # # # Reload values from the worksheet where your COMMON campaign data is stored
 campaign_exp_sheet = spreadsheet.worksheet(commonExportedCampaignsSheet)
-# # # Access the 'Interim' sheet with predefined structure
+# # # # Access the 'Interim' sheet with predefined structure
 interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 
 fillInterimCampaignsDataColumn(interim_campaigns_sheet, campaign_exp_sheet ) 
@@ -56,7 +56,7 @@ time.sleep(1)
 step2_Totals_Calc(interim_campaigns_sheet) #Calculate TOTAL summary 
 time.sleep(1)
 
-pauseMe('SMA1 - STEP-2 \n')
+# pauseMe('SMA1 - STEP-2 \n')
 
 # # ---------------- STEP-3 FORMATING STEP !!! ---------------------------------
 
@@ -80,7 +80,8 @@ for date_row in range(3, len(column_b_values)+INTERIM_SHEET_DATA):
     campaign_format_dates(date_row, GOOGLE_WORKBOOK, service, column_letter_to_index(GOOGLE_TOTAL_COL)+5, len(GOOGLE_CAMPAIGNS), interim_campaigns_sheet.id)
     # pauseMe('!!!!!!!!!!! CHEK phase - SMA1 - STEP-2-3 \n') 
 
-pauseMe('SMA1 - STEP-3 \n')
+# pauseMe('SMA1 - STEP-3 \n')
+
 interim_campaigns_sheet = spreadsheet.worksheet(interim_campaigns_sheet_name)
 # # ---------------- STEP-4 FORMATTED TOTAL SHEET CREATE  ---------------------------------
 # # STEP 10 - format rows per week per month 

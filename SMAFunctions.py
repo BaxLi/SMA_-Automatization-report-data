@@ -587,13 +587,17 @@ def insert_week_and_month_totals(total_sheet):
                     # Insert the SUM formula for column B and replicate it across the row
                     
                     colB_Week_Sum(adjusted_row_index,  total_sheet)
-                    time.sleep(1)
-                    inserted_rows_count += 1  # Update the count of inserted rows
-                    adjusted_row_index += 1  # Adjust the row index for possible next insertion
+                    print(f'SUM WEEK - ROW={adjusted_row_index} total_sheet #REF? ={total_sheet.col_values(2)[adjusted_row_index-1]} --- column 0 = {total_sheet.col_values(1)[adjusted_row_index-1]}')
+                    if total_sheet.col_values(2)[adjusted_row_index-1]=="#REF!":
+                        total_sheet.delete_rows(adjusted_row_index)
+                    else:
+                        time.sleep(1)
+                        inserted_rows_count += 1  # Update the count of inserted rows
+                        adjusted_row_index += 1  # Adjust the row index for possible next insertion
 
                 # If it's the last day of the month, insert a row for month totals
                 if is_last_day_of_month:
-                    print(f' Last day of Month !   (!) Condition 2 \n')
+                    print(f' Last day of Month ! (!) Condition 2 \n adjusted_row_index={adjusted_row_index} is_last_day_of_month={is_last_day_of_month}')
                     total_sheet.insert_row(["Week - " + str(current_week_number)+", "+str(year)], adjusted_row_index+1)
                     group_rows(total_sheet, start_group_row_weeks, adjusted_row_index)
                     start_group_row_weeks=adjusted_row_index+3
@@ -611,6 +615,7 @@ def insert_week_and_month_totals(total_sheet):
                     time.sleep(1)
                     colB_Month_Sum(adjusted_row_index+1, total_sheet)
                     inserted_rows_count += 1  # Update the count of inserted rows
+
 
             # Update the previous week number for the next iteration
             previous_week_number = current_week_number
@@ -644,12 +649,6 @@ def colB_Month_Sum(row_index, mysheet, FB_Summary_COL='J', GOOGLE_Summary_COL='B
         else:
             sum_formula = f"=SUM({col_letter}{start_row}:{col_letter}{end_row})/2"
         sum_formulas.append(sum_formula)
-        # if col_letter=='H' or col_letter=="I":
-        #     myCol= FB_Summary_COL if col_letter=='H' else GOOGLE_Summary_COL
-        #     sum_formula=f"=IF(B{row_index}<>0,{myCol}{row_index}/B{row_index},0)"
-        # else:
-        #     sum_formula = f"=SUM({col_letter}{idx}:{col_letter}{row_index-1})/2"
-        # sum_formulas.append(sum_formula)
 
     range_to_update = f"B{row_index}:{column_index_to_string(mysheet.col_count - 1)}{row_index}"
     mysheet.update(values=[sum_formulas],range_name=range_to_update, value_input_option='USER_ENTERED' )
@@ -659,6 +658,7 @@ def colB_Month_Sum(row_index, mysheet, FB_Summary_COL='J', GOOGLE_Summary_COL='B
     add_up_down_borders_to_rows(mysheet, row_index, row_index, 2)
 
 def colB_Week_Sum(adjusted_row_index, total_sheet, FB_Summary_COL='J', GOOGLE_Summary_COL='BT'):
+    print(f'colB_Week_Sum adjusted_row_index={adjusted_row_index}')
     end_row = adjusted_row_index - 1
     start_row = identify_non_numerical_cell_in_column_B(end_row, total_sheet)
     sum_formulas = []
